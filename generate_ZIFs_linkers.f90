@@ -78,8 +78,10 @@ program zif_generator
  use mod_random
 ! use topology_agents,only generate
  implicit none
- integer             :: i,j,k,l,h,m,ierr,nn
+ integer             :: i,j,k,l,h,m,ierr,nn,seed
+ integer             :: ii,jj,kk
  real                :: rrr,ppp,qqq
+ real                :: atom(3),ouratom(3)
  integer             :: num_args
  real,parameter      :: r_min_criteria_connectivity=0.56
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
@@ -94,6 +96,7 @@ program zif_generator
  character(len=100), dimension(:), allocatable :: args
  character(len=3),dimension(:),allocatable     :: linker_type
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
+ integer,dimension(:),allocatable              :: genome
  character(len=3) :: code
  real             :: molar_fraction
  type                          :: cluster
@@ -106,6 +109,8 @@ program zif_generator
   logical                      :: virtual
  end type
  type(cluster),allocatable     :: linkers(:) 
+ type(cluster),allocatable     :: nodes(:)
+ call init_random_seed(seed)
  num_args = command_argument_count()
  allocate(args(num_args))
  do i = 1, num_args
@@ -182,6 +187,7 @@ program zif_generator
   end if
  end do
  rewind(111)
+ allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
  write(6,'(80a)')('=',j=1,80)
  write(6,*)n_nodes, 'nodes/uc'
@@ -243,7 +249,15 @@ program zif_generator
   end do
   do j=1,n_nodes
    read(100,'(a)') line
+   if(i==1) then
+    nodes(j)%id=j
+    nodes(j)%code='Zn'
+    nodes(j)%n_components=1
+    nodes(j)%virtual=.false.
+    read(line,*) nodes(j)%component_label(1),(nodes(j)%component_xcrystal(m,1),m=1,3),rrr
+   end if
   end do
+  write(6,*)( nodes(j)%component_label(1),j=1,n_nodes)
   do j=1,n_linkers
    h=h+1 ! count total number of linkers
    write(6,'(80a)')('=',l=1,80)
@@ -252,8 +266,6 @@ program zif_generator
    linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
    linkers(h)%virtual=.true.
    do k=1,int((n_atoms-n_nodes)/n_linkers)
-    !read(100,'(a)') line
-    !write(6,*) line
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
    end do
@@ -262,6 +274,53 @@ program zif_generator
   close(100)
  end do
  close(111)
+ write(6,*)'Nodes:'
+ do i=1,n_nodes
+  write(222,*) nodes(i)%component_label(1),(nodes(i)%component_xcrystal(m,1),m=1,3)
+ end do
+ write(6,*)'Linkers: [',h,']'
+ j=0
+ allocate(genome(n_linkers))
+ genome=0
+ add_linkers: do 
+  if(j==n_linkers) exit
+  j=j+1
+  k=randint(1,h,seed)  ! new linker
+  if(j==1)then
+   genome(1)=k
+   do i=1,linkers(k)%n_components
+    write(222,*)linkers(k)%component_label(i),(linkers(k)%component_xcrystal(m,i),m=1,3)
+   end do
+   cycle add_linkers
+  end if
+! overlap?
+  do l=1,j-1 ! scan previous linkers
+   if(genome(l)==k) then
+    j=j-1
+    cycle add_linkers ! is it really new?
+   end if
+   do ii=1,linkers(genome(l))%n_components    
+    do jj=1,linkers(k)%n_components
+     do kk=1,3
+      atom(kk)=linkers(genome(l))%component_xcrystal(kk,ii)
+      ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
+     end do
+     call make_distances(cell_0,ouratom,atom,rv,rrr)
+     if (rrr<=1.5) then
+      j=j-1
+      cycle add_linkers         ! overlap !!!
+     end if
+    end do
+   end do
+  end do
+  ! great!
+  genome(j)=k
+  do i=1,linkers(k)%n_components
+   write(222,*)linkers(k)%component_label(i),(linkers(k)%component_xcrystal(m,i),m=1,3)
+  end do
+ end do add_linkers
+ !mc_exchange_linkers: do i=1,1
+ !end do mc_exchange_linkers
  stop
  contains
 
