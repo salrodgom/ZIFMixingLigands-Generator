@@ -1,5 +1,82 @@
+module mod_random
+! module for pseudo random numbers
+ implicit none
+ private
+ public init_random_seed, randint, r4_uniform
+contains
+ subroutine init_random_seed(seed)
+  implicit none
+  integer, intent(out) :: seed
+  integer   day,hour,i4_huge,milli,minute,month,second,year
+  parameter (i4_huge=2147483647)
+  double precision temp
+  character*(10) time
+  character*(8) date
+  call date_and_time (date,time)
+  read (date,'(i4,i2,i2)')year,month,day
+  read (time,'(i2,i2,i2,1x,i3)')hour,minute,second,milli
+  temp=0.0D+00
+  temp=temp+dble(month-1)/11.0D+00
+  temp=temp+dble(day-1)/30.0D+00
+  temp=temp+dble(hour)/23.0D+00
+  temp=temp+dble(minute)/59.0D+00
+  temp=temp+dble(second)/59.0D+00
+  temp=temp+dble(milli)/999.0D+00
+  temp=temp/6.0D+00
+  doext: do
+    if(temp<=0.0D+00 )then
+       temp=temp+1.0D+00
+       cycle doext
+    else
+       exit doext
+    end if
+  enddo doext
+  doext2: do
+    if (1.0D+00<temp) then
+       temp=temp-1.0D+00
+       cycle doext2
+    else
+       exit doext2
+    end if
+  end do doext2
+  seed=int(dble(i4_huge)*temp)
+  if(seed == 0)       seed = 1
+  if(seed == i4_huge) seed = seed-1
+  return
+ end subroutine init_random_seed
+
+ integer function randint(i,j,seed)
+  real               ::  a,b
+  integer,intent(in) ::  i,j,seed
+  a = real(i)
+  b = real(j)
+  randint=int(r4_uniform(a,b+1.0,seed))
+ end function randint
+
+ real function r4_uniform(b1,b2,seed)
+  implicit none
+  real b1,b2
+  integer i4_huge,k,seed
+  parameter (i4_huge=2147483647)
+  if(seed == 0) then
+   write(*,'(b1)')'R4_UNIFORM - Fatal error!'
+   write(*,'(b1)')'Input value of SEED = 0.'
+   stop '[ERROR] Chiquitan chiquitintatan'
+  end if
+  k=seed/127773
+  seed=16807*(seed-k*17773)-k*2836
+  if(seed<0) then
+    seed=seed+i4_huge
+  endif
+  r4_uniform=b1+(b2-b1)*real(dble(seed)* 4.656612875D-10)
+  return
+ end function r4_uniform
+end module
+
 program zif_generator
  use iso_fortran_env
+ use mod_random
+! use topology_agents,only generate
  implicit none
  integer             :: i,j,k,l,h,m,ierr,nn
  real                :: rrr,ppp,qqq
@@ -14,19 +91,26 @@ program zif_generator
  character(len=100)  :: filename=" "
  character(len=80)   :: string_stop_head= "_atom_site_occupancy"
  character(len=100)  :: line,string
-! zif_tbp_im_GIS_e.cif
  character(len=100), dimension(:), allocatable :: args
- character(len=4),dimension(:),allocatable     :: linker_type
+ character(len=3),dimension(:),allocatable     :: linker_type
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
+ character(len=3) :: code
+ real             :: molar_fraction
+ type                          :: cluster
+  character(len=3)             :: code
+  integer                      :: n_components
+  integer                      :: id
+  real                         :: component_xcrystal(1:3,1:100)
+  character(len=2)             :: component_label(100)
+  real                         :: fitness
+  logical                      :: virtual
+ end type
+ type(cluster),allocatable     :: linkers(:) 
  num_args = command_argument_count()
  allocate(args(num_args))
  do i = 1, num_args
   call get_command_argument(i,args(i))
  end do
- if(num_args==0) then
-  call print_help()
-  stop
- end if
  do i=1,num_args
   select case(args(i))
    case ('-h','--help')
@@ -46,28 +130,48 @@ program zif_generator
     read(args(i+1),'(3a)') topology
   end select
  end do
+ if(allocated(linker_type).eqv..false.)then
+  linker_type_number=1
+  allocate(linker_type(1:linker_type_number))
+  allocate(linker_type_molar_fraction(1:linker_type_number))
+  linker_type(1)='im '
+  linker_type_molar_fraction(1)=1.0
+ end if
  rrr=sum(linker_type_molar_fraction)
  write(6,'(80a)')('=',j=1,80)
  write(6,*)( linker_type(j),j=1,linker_type_number)
  write(6,*)( linker_type_molar_fraction(j)/rrr ,j=1,linker_type_number)
  write(6,'(80a)')('=',j=1,80)
+ call system("if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi")
+ write(6,'(a)') "if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi"
  call system("if [ -f list ] ; then rm list ; touch list ; fi")
+ write(6,'(a)') "if [ -f list ] ; then rm list ; touch list ; fi"
  do j=1,linker_type_number
   i=len(trim(linker_type(j)))
   k=LEN(TRIM(topology))
-  string="ls zif_"//topology//"_cif_gin_all/zif_tbp_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif >> list"
-  write(6,'(a)') string
+  string="ls zif_"//topology(1:k)//"_cif_gin_all/zif_tbp_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
+  call system(string)
+  write(6,'(a)')string
+  write(line,*) linker_type_molar_fraction(j)
+  k=len(trim(line))
+  string="awk -v type="//linker_type(j)(1:i)//&
+   " -v r="//line(4:k)//" '{print $1,type,r}' tmp >> list"
+  write(6,'(a)')string
   call system(string)
  end do
  open(111,file="list",iostat=ierr)
  n_files=0
  do
-  read(111,'(a)',iostat=ierr) line
+  read(111,'(a)',iostat=ierr) line 
   if(ierr/=0) exit
+  read(line(1:41),'(a)') CIFFilename
+  read(line(42:) ,*) code,molar_fraction
+  write(6,'(a,1x,a,1x,f10.5)')trim(CIFFilename),trim(code),molar_fraction
   n_files=n_files+1
   if(n_files==1)then
   !Investigate number of Zn -> number of ligands -> atoms/ligands
-   open(121,file=trim(line),iostat=ierr)
+   open(121,file=CIFFilename,iostat=ierr,status='old')
+   if(ierr/=0)stop 'File does not found'
    do 
     read(121,'(a)',iostat=ierr) line
     if(ierr/=0)exit
@@ -78,13 +182,19 @@ program zif_generator
   end if
  end do
  rewind(111)
+ allocate(linkers(n_files*n_linkers))
  write(6,'(80a)')('=',j=1,80)
  write(6,*)n_nodes, 'nodes/uc'
  write(6,*)n_linkers,'linkers/uc'
  write(6,*)n_files, 'files detected'
+ write(6,*)n_files*n_linkers,' total linkers spected'
+ h=0 ! count total number of linkers
+ write(6,'(80a)')('=',j=1,80)
  do i=1,n_files
-  read(111,'(a)') CIFfilename
-  write(6,'(a)') trim(CIFfilename)
+  read(111,'(a)',iostat=ierr) line
+  read(line(1:41),'(a)') CIFFilename
+  read(line(42:) ,*) code,molar_fraction
+  write(6,'(a1,1x,a)')'#',trim(CIFfilename)
   open(100,file=trim(CIFfilename),status='old',iostat=ierr)
   if(ierr/=0)stop 'File does not found'
   read_cif: do
@@ -135,12 +245,19 @@ program zif_generator
    read(100,'(a)') line
   end do
   do j=1,n_linkers
+   h=h+1 ! count total number of linkers
    write(6,'(80a)')('=',l=1,80)
-   !write(6,'(60a,4a,16a)')('=',l=1,60),linker_type(),('=',l=1,16)
+   linkers(h)%id=h
+   linkers(h)%code=code
+   linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
+   linkers(h)%virtual=.true.
    do k=1,int((n_atoms-n_nodes)/n_linkers)
-    read(100,'(a)') line
-    write(6,*) line
+    !read(100,'(a)') line
+    !write(6,*) line
+    read(100,*) linkers(h)%component_label(k),&
+     ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
    end do
+   write(6,*)( linkers(h)%component_label(k),k=1,int((n_atoms-n_nodes)/n_linkers) )
   end do
   close(100)
  end do
