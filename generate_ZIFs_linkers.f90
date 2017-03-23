@@ -84,6 +84,7 @@ program zif_generator
  real                :: atom(3),ouratom(3)
  integer             :: num_args
  real,parameter      :: r_min_criteria_connectivity=0.56
+ integer,parameter   :: max_number_tries=10000
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: linker_type_number = 1, n_files=1
@@ -274,29 +275,44 @@ program zif_generator
   close(100)
  end do
  close(111)
- write(6,*)'Nodes:'
- do i=1,n_nodes
-  write(222,*) nodes(i)%component_label(1),(nodes(i)%component_xcrystal(m,1),m=1,3)
- end do
- write(6,*)'Linkers: [',h,']'
+ !write(6,*)'Nodes:'
+ !do i=1,n_nodes
+ ! write(222,*) nodes(i)%component_label(1),(nodes(i)%component_xcrystal(m,1),m=1,3)
+ !end do
+ !write(6,*)'Linkers: [',h,']'
  j=0
  allocate(genome(n_linkers))
  genome=0
+ nn=0
  add_linkers: do 
-  if(j==n_linkers) exit
+  if(nn==max_number_tries) then
+   j=0       ! if the number of tries is bigger than a limit, 
+   genome=0  ! we start again with the first ligand.
+   nn=0
+   linkers%virtual=.true. ! all the linkers are virtuals again!
+   write(6,'(a)')'[warning] Relocation this ligands is hard, check the input'
+   cycle add_linkers
+   !call system('rm fort.222')
+   !stop
+  end if
+  if(j==n_linkers) exit add_linkers
   j=j+1
   k=randint(1,h,seed)  ! new linker
   if(j==1)then
    genome(1)=k
-   do i=1,linkers(k)%n_components
-    write(222,*)linkers(k)%component_label(i),(linkers(k)%component_xcrystal(m,i),m=1,3)
-   end do
+   linkers(k)%virtual=.false.
+   !do i=1,linkers(k)%n_components
+   ! write(222,*)linkers(k)%component_label(i),(linkers(k)%component_xcrystal(m,i),m=1,3)
+   !end do
+   nn=nn+1
    cycle add_linkers
   end if
 ! overlap?
+
   do l=1,j-1 ! scan previous linkers
    if(genome(l)==k) then
     j=j-1
+    nn=nn+1
     cycle add_linkers ! is it really new?
    end if
    do ii=1,linkers(genome(l))%n_components    
@@ -308,18 +324,43 @@ program zif_generator
      call make_distances(cell_0,ouratom,atom,rv,rrr)
      if (rrr<=1.5) then
       j=j-1
+      nn=nn+1
       cycle add_linkers         ! overlap !!!
      end if
     end do
    end do
   end do
   ! great!
+  nn=0
   genome(j)=k
-  do i=1,linkers(k)%n_components
-   write(222,*)linkers(k)%component_label(i),(linkers(k)%component_xcrystal(m,i),m=1,3)
-  end do
+  linkers(k)%virtual=.false.
  end do add_linkers
+ write(6,'(80a)')('=',l=1,80)
+ !write(line,'(i3)') n_linkers  ! automatic format ! fail ??
+ !line   = adjustl(line) 
+ !string ="'(("//adjustl(trim(line))//"(i3,1x)))'"
+ !string = adjustl(string)
+ !write(6,'(a)')string
+ !write(6,string) ( genome(i),i=1,n_linkers )
+ write(6,'((24(i3,1x)))') ( genome(i),i=1,n_linkers )
+ write(6,'(80a)')('=',l=1,80)
+ do i=1,n_nodes
+  if( nodes(i)%virtual.eqv..false.)then
+   do j=1,nodes(i)%n_components
+    write(222,*) nodes(i)%component_label(j),(nodes(i)%component_xcrystal(m,j),m=1,3)
+   end do
+  end if
+ end do
+ do i=1,n_linkers
+  if( linkers(genome(i))%virtual.eqv..false.)then
+   do j=1,linkers(genome(i))%n_components
+    write(222,*) linkers(genome(i))%component_label(j),&
+     (linkers(genome(i))%component_xcrystal(m,j),m=1,3)
+   end do
+  end if
+ end do
  !mc_exchange_linkers: do i=1,1
+ ! 
  !end do mc_exchange_linkers
  stop
  contains
