@@ -79,6 +79,7 @@ program zif_generator
 ! use topology_agents,only generate
  implicit none
  integer             :: i,j,k,l,h,m,ierr,nn,seed
+ integer             :: linker_type_max=4
  integer             :: ii,jj,kk
  real                :: rrr,ppp,qqq
  real                :: atom(3),ouratom(3)
@@ -98,6 +99,7 @@ program zif_generator
  character(len=3),dimension(:),allocatable     :: linker_type
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
  integer,dimension(:),allocatable              :: genome
+ integer,dimension(:),allocatable              :: histogram_molar_fraction
  character(len=3) :: code
  real             :: molar_fraction
  type                          :: cluster
@@ -148,6 +150,7 @@ program zif_generator
  write(6,*)( linker_type(j),j=1,linker_type_number)
  write(6,*)( linker_type_molar_fraction(j)/rrr ,j=1,linker_type_number)
  write(6,'(80a)')('=',j=1,80)
+ allocate(histogram_molar_fraction(linker_type_number)
  call system("if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi")
  write(6,'(a)') "if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi"
  call system("if [ -f list ] ; then rm list ; touch list ; fi")
@@ -330,12 +333,13 @@ program zif_generator
  write(6,'((24(i3,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
  mc_exchange_linkers: do i=1,2
+  l=randint(1,n_linkers,seed)
+  j=genome(l)
   k=randint(1,h,seed)
-  l=randint(1,h,seed)
-  do while (k==l)
-   l=randint(1,h,seed)
+  do while (k==j)
+   k=randint(1,h,seed)
   end do
-  !!!!!!
+  
  end do mc_exchange_linkers
  call writeCIFFile_from_clusters()
  stop
