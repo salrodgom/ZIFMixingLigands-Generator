@@ -339,7 +339,6 @@ program zif_generator
   do while (k==j)
    k=randint(1,h,seed)
   end do
-  
  end do mc_exchange_linkers
  call writeCIFFile_from_clusters()
  stop
