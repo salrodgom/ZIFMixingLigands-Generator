@@ -88,8 +88,10 @@ program zif_generator
  integer,parameter   :: max_number_tries=10000
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
- integer             :: linker_type_number = 1, n_files=1
- character(len=3)    :: topology = "SOD"
+ integer             :: n_files=1
+ integer             :: mc_steps,mc_max_steps=500
+ integer             :: solera,solera_max=10
+ character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
  character(len=100)  :: CIFFilename=" "
  character(len=100)  :: filename=" "
@@ -97,22 +99,25 @@ program zif_generator
  character(len=100)  :: line,string
  character(len=100), dimension(:), allocatable :: args
  character(len=3),dimension(:),allocatable     :: linker_type
+ integer                                       :: linker_type_number = 1
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
  integer,dimension(:),allocatable              :: genome
  integer,dimension(:),allocatable              :: histogram_molar_fraction
  character(len=3) :: code
  real             :: molar_fraction
- type                          :: cluster
-  character(len=3)             :: code
-  integer                      :: n_components
-  integer                      :: id
-  real                         :: component_xcrystal(1:3,1:100)
-  character(len=2)             :: component_label(100)
-  real                         :: fitness
-  logical                      :: virtual
+ type                       :: cluster
+  character(len=3)          :: code
+  integer                   :: n_components
+  integer                   :: id
+  real                      :: component_xcrystal(1:3,1:100)
+  real                      :: component_size(100)
+  character(len=2)          :: component_label(100)
+  real                      :: comfortably
+  logical                   :: virtual
  end type
- type(cluster),allocatable     :: linkers(:) 
- type(cluster),allocatable     :: nodes(:)
+ type(cluster),allocatable  :: linkers(:) 
+ integer,allocatable        :: ensemble(:,:)
+ type(cluster),allocatable  :: nodes(:)
  call init_random_seed(seed)
  num_args = command_argument_count()
  allocate(args(num_args))
@@ -131,7 +136,7 @@ program zif_generator
     k=0
     do j = 1, linker_type_number
      k=k+2
-     read(args(i+k),'(4a)') linker_type(j)                ! 2,4
+     read(args(i+k),'(a)') linker_type(j)                ! 2,4
      read(args(i+k+1),*) linker_type_molar_fraction(j) ! 3,5
     end do
    case ('-t','--topol')
@@ -142,15 +147,16 @@ program zif_generator
   linker_type_number=1
   allocate(linker_type(1:linker_type_number))
   allocate(linker_type_molar_fraction(1:linker_type_number))
-  linker_type(1)='im '
+  linker_type(1)='imi'
   linker_type_molar_fraction(1)=1.0
  end if
  rrr=sum(linker_type_molar_fraction)
+ linker_type_molar_fraction=linker_type_molar_fraction/rrr
  write(6,'(80a)')('=',j=1,80)
  write(6,*)( linker_type(j),j=1,linker_type_number)
  write(6,*)( linker_type_molar_fraction(j)/rrr ,j=1,linker_type_number)
  write(6,'(80a)')('=',j=1,80)
- allocate(histogram_molar_fraction(linker_type_number)
+ allocate(histogram_molar_fraction(linker_type_number))
  call system("if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi")
  write(6,'(a)') "if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi"
  call system("if [ -f list ] ; then rm list ; touch list ; fi")
@@ -163,8 +169,8 @@ program zif_generator
   write(6,'(a)')string
   write(line,*) linker_type_molar_fraction(j)
   k=len(trim(line))
-  string="awk -v type="//linker_type(j)(1:i)//&
-   " -v r="//line(4:k)//" '{print $1,type,r}' tmp >> list"
+  string="awk -v type="      //linker_type(j)(1:i)//&
+   " -v r="      //line(4:k)//" '{print $1,type,r}' tmp >> list"
   write(6,'(a)')string
   call system(string)
  end do
@@ -174,8 +180,8 @@ program zif_generator
   read(111,'(a)',iostat=ierr) line 
   if(ierr/=0) exit
   read(line(1:41),'(a)') CIFFilename
-  read(line(42:) ,*) code,molar_fraction
-  write(6,'(a,1x,a,1x,f10.5)')trim(CIFFilename),trim(code),molar_fraction
+  read(line(42:),*) code,molar_fraction
+  write(6,*)trim(CIFFilename),trim(code),molar_fraction
   n_files=n_files+1
   if(n_files==1)then
   !Investigate number of Zn -> number of ligands -> atoms/ligands
@@ -193,6 +199,7 @@ program zif_generator
  rewind(111)
  allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
+ allocate(ensemble(n_linkers,n_files))
  write(6,'(80a)')('=',j=1,80)
  write(6,*)n_nodes, 'nodes/uc'
  write(6,*)n_linkers,'linkers/uc'
@@ -263,15 +270,17 @@ program zif_generator
   end do
   write(6,*)( nodes(j)%component_label(1),j=1,n_nodes)
   do j=1,n_linkers
-   h=h+1 ! count total number of linkers
+   h=h+1                           ! count total number of linkers
    write(6,'(80a)')('=',l=1,80)
    linkers(h)%id=h
    linkers(h)%code=code
    linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
    linkers(h)%virtual=.true.
+   ensemble(j,i)=linkers(h)%id     ! registro de linker en file
    do k=1,int((n_atoms-n_nodes)/n_linkers)
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
+    call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k))
    end do
    write(6,*)( linkers(h)%component_label(k),k=1,int((n_atoms-n_nodes)/n_linkers) )
   end do
@@ -281,7 +290,7 @@ program zif_generator
  call system('rm list tmp')
  j=0
  allocate(genome(n_linkers))
- genome=0
+ genome=0 ! lista de linkers
  nn=0
  add_linkers: do 
   if(nn==max_number_tries) then
@@ -294,7 +303,8 @@ program zif_generator
   end if
   if(j==n_linkers) exit add_linkers
   j=j+1
-  k=randint(1,h,seed)  ! new linker
+  k=ensemble(j,randint(1,n_files,seed))
+  !k=randint(1,h,seed)  ! new linker
   if(j==1)then
    genome(1)=k
    linkers(k)%virtual=.false.
@@ -315,7 +325,9 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if (rrr<=1.3) then
+     !if ( rrr<=linkers(genome(l))%component_size(ii)+& 
+     !    linkers(k)%component_size(jj)+0.56) then
+     if( rrr <= 1.0 ) then
       j=j-1
       nn=nn+1
       cycle add_linkers         ! overlap !!!
@@ -330,19 +342,124 @@ program zif_generator
  end do add_linkers
  write(6,'(80a)')('=',l=1,80)
  write(6,*)( linker_type(i),i=1,linker_type_number )
- write(6,'((24(i3,1x)))') ( genome(i),i=1,n_linkers )
+ write(6,'((1000(i3,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
- mc_exchange_linkers: do i=1,2
-  l=randint(1,n_linkers,seed)
-  j=genome(l)
-  k=randint(1,h,seed)
-  do while (k==j)
-   k=randint(1,h,seed)
+ mc_steps=0
+ mc_exchange_linkers: do mc_steps=1,mc_max_steps !while !(mc_steps<=mc_max_steps.or.solera<=solera_max)
+  rrr = cost()
+  l=randint(1,n_linkers,seed)  ! l:=position of linker in genome
+  j=genome( l )                          ! j old linker 
+  k=ensemble(l,randint(1,n_files,seed))  ! k new posible linker
+  do while (k==j.or.linkers(k)%virtual.eqv..false.)
+   k=ensemble(j,randint(1,n_files,seed))
   end do
+  genome(l) = k                     ! test linker-k
+  linkers(j)%virtual=.true.         ! j <- virtual
+  linkers(k)%virtual=.false.        ! k <- real
+  ppp = cost()
+  if(ppp>=rrr)then
+   genome(l) = j                    ! rechazo el cambio
+   linkers(k)%virtual=.true.        ! k <- virtual
+   linkers(j)%virtual=.false.       ! j <- real
+  else
+   write(6,'((i5,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+  end if
  end do mc_exchange_linkers
+ write(6,'(1000(i3,1x))')(genome(i),i=1,n_linkers)
  call writeCIFFile_from_clusters()
  stop
  contains
+ subroutine update_molar_fraction()
+  implicit none
+  integer         :: abc
+  integer         :: iabc,ijk
+  histogram_molar_fraction=0
+  do iabc=1,n_linkers
+   ijk=genome(iabc)
+   do abc=1,linker_type_number
+    if(linkers(ijk)%code==linker_type(abc))then
+     histogram_molar_fraction(abc)=histogram_molar_fraction(abc)+1
+    end if
+   end do
+  end do
+  return
+ end subroutine update_molar_fraction
+ real function cost_molar()
+  implicit none
+  real             ::  molar_constant=1
+  integer          ::  abc
+  call update_molar_fraction()
+  molar_constant=0.5*real(n_linkers**3)
+  cost_molar=0.0
+  do abc=1,linker_type_number
+   cost_molar=cost_molar+&
+   molar_constant*(histogram_molar_fraction(abc)/real(n_linkers)-linker_type_molar_fraction(abc))**2
+  end do
+  return
+ end function  cost_molar
+ real function cost_exchange()
+  implicit none 
+  integer               :: i,j,ii,jj,k
+  real                  :: r
+  cost_exchange=0.0
+  do i=1,n_linkers
+   if(linkers(genome(i))%virtual.eqv..true.) then
+    write(6,*)( linkers(genome(i))%virtual,ii=1,n_linkers )
+    stop 'genome with virtual linker'
+   end if
+   do j=i+1,n_linkers
+    if(linkers(genome(j))%virtual.eqv..true.)then
+     write(6,*)( linkers(genome(j))%virtual,ii=1,n_linkers )
+     stop 'genome with virtual linker'
+    end if
+    do ii=1,linkers(genome(i))%n_components
+     do jj=1,linkers(genome(j))%n_components
+      forall (k=1:3)
+       atom(k)=linkers(genome(j))%component_xcrystal(k,jj)
+       ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
+      end forall
+      call make_distances(cell_0,ouratom,atom,rv,r)
+      cost_exchange = cost_exchange + 1.0/r
+     end do
+    end do
+   end do
+  end do
+  return
+ end function cost_exchange
+ real function cost()
+  implicit none
+  cost = cost_exchange() + cost_molar()
+  return
+ end function  cost
+ subroutine check_atom_type(lll,s)
+  implicit none
+  real,intent(out)            :: s
+  character(len=2),intent(in) :: lll
+  check_atom: select case (lll)
+   case('H ',' H','HO','H1','H2','H3')
+    rrr=0.320
+   case('C ','C1':'C9',' C')
+    s=0.720
+   case('N ',' N','N1':'N9')
+    s=0.7
+   case('O ','O1':'O9','OH',' O')
+    s=0.7
+   case('Si')
+    s=1.14
+   case('Al')
+    s=1.14
+   case('Xe')
+    s=0.0001
+   case('Zn')
+    s=1.6
+   case('Cl')
+    s=1.00
+   case default
+    STOP 'Atom unknowed'
+  end select check_atom
+  return
+ end subroutine check_atom_type
  subroutine writeCIFFile_from_clusters()
   implicit none
   integer,parameter :: u=234
@@ -351,7 +468,6 @@ program zif_generator
   !write(6,'(a)') line
   !write(string,line)(adjustl(trim(linker_type(ii))), ii=1,linker_type_number )
   !write(filename,'(a,a,a,a)')adjustl(trim(topology)),'_',adjustl(trim(string)),'_mixture.cif' 
-  !write(6,'(a)') string
   open(u,file=outfilename,iostat=ierr)
   write(u,'(a)')'data_cif'
   write(u,'(a)')"_audit_creation_method 'generated by iGOR'"
@@ -612,6 +728,7 @@ end subroutine make_dist_matrix
    o_atom(j)    = rv(j,1)*atom(1) + rv(j,2)*atom(2) + rv(j,3)*atom(3)
    dist(j) = o_ouratom(j) - o_atom(j)
   END FORALL
+  DISTANCE = sqrt(dist(1)*dist(1) + dist(2)*dist(2) + dist(3)*dist(3))
   DISTANCE = sqrt(dist(1)*dist(1) + dist(2)*dist(2) + dist(3)*dist(3))
  END FUNCTION
  subroutine print_help()
