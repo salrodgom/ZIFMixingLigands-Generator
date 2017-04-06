@@ -268,10 +268,10 @@ program zif_generator
     read(line,*) nodes(j)%component_label(1),(nodes(j)%component_xcrystal(m,1),m=1,3),rrr
    end if
   end do
-  write(6,*)( nodes(j)%component_label(1),j=1,n_nodes)
+  !write(6,*)( nodes(j)%component_label(1),j=1,n_nodes)
   do j=1,n_linkers
    h=h+1                           ! count total number of linkers
-   write(6,'(80a)')('=',l=1,80)
+   !write(6,'(80a)')('=',l=1,80)
    linkers(h)%id=h
    linkers(h)%code=code
    linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
@@ -282,7 +282,7 @@ program zif_generator
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
     call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k))
    end do
-   write(6,*)( linkers(h)%component_label(k),k=1,int((n_atoms-n_nodes)/n_linkers) )
+   !write(6,*)( linkers(h)%component_label(k),k=1,int((n_atoms-n_nodes)/n_linkers) )
   end do
   close(100)
  end do
@@ -325,8 +325,6 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     !if ( rrr<=linkers(genome(l))%component_size(ii)+& 
-     !    linkers(k)%component_size(jj)+0.56) then
      if( rrr <= 1.0 ) then
       j=j-1
       nn=nn+1
@@ -420,7 +418,7 @@ program zif_generator
        ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
       end forall
       call make_distances(cell_0,ouratom,atom,rv,r)
-      cost_exchange = cost_exchange + 1.0/r
+      cost_exchange = cost_exchange + 4*((2.5/r)**12-(2.5/r)**6)
      end do
     end do
    end do
