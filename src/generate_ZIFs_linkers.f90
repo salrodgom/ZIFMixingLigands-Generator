@@ -360,7 +360,7 @@ program zif_generator
    linkers(k)%virtual=.true.        ! k <- virtual
    linkers(j)%virtual=.false.       ! j <- real
   else
-   write(6,'((i5,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+   write(6,'((i5,1x,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   end if
  end do mc_exchange_linkers
