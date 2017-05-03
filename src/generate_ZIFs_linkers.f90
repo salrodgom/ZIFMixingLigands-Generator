@@ -89,7 +89,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=500
+ integer             :: mc_steps,mc_max_steps=2000
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -312,6 +312,7 @@ program zif_generator
    cycle add_linkers
   end if
 ! overlap?
+! 16.04.2017
   do l=1,j-1 ! scan previous linkers
    if(genome(l)==k) then
     j=j-1
@@ -388,7 +389,7 @@ program zif_generator
   real             ::  molar_constant=1
   integer          ::  abc
   call update_molar_fraction()
-  molar_constant=0.5*real(n_linkers**3)
+  molar_constant=10000 !0.5*real(n_linkers**3)
   cost_molar=0.0
   do abc=1,linker_type_number
    cost_molar=cost_molar+&
@@ -418,7 +419,12 @@ program zif_generator
        ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
       end forall
       call make_distances(cell_0,ouratom,atom,rv,r)
-      cost_exchange = cost_exchange + 4*((2.5/r)**12-(2.5/r)**6)
+      !if((linkers(genome(i))%component_label/='H1').and.&
+      !   (linkers(genome(j))%component_label/='H1'))then
+      ! cost_exchange = cost_exchange + 0.4*((2.5/r)**12-(2.5/r)**6)
+      !else
+       cost_exchange = cost_exchange + 0.04*((2.5/r)**12-(2.5/r)**6)
+      !end if
      end do
     end do
    end do
