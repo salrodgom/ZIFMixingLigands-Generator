@@ -89,7 +89,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=2000
+ integer             :: mc_steps,mc_max_steps=100
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -338,7 +338,7 @@ program zif_generator
  end do add_linkers
  write(6,'(80a)')('=',l=1,80)
  write(6,'(20(a5,1x))')( linker_type(i),i=1,linker_type_number )
- write(6,'((1000(i4,1x)))') ( genome(i),i=1,n_linkers )
+ write(6,'((1000(i6,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
  mc_steps=0
  mc_exchange_linkers: do mc_steps=1,mc_max_steps !while !(mc_steps<=mc_max_steps.or.solera<=solera_max)
@@ -362,7 +362,7 @@ program zif_generator
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   end if
  end do mc_exchange_linkers
- write(6,'(1000(i3,1x))')(genome(i),i=1,n_linkers)
+ write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
  call writeCIFFile_from_clusters()
  stop
  contains
