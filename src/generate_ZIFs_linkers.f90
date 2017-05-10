@@ -301,11 +301,11 @@ program zif_generator
   if(j==n_linkers) exit add_linkers
   j=j+1
   k=ensemble(j,randint(1,n_files,seed))
-  !k=randint(1,h,seed)  ! new linker
   if(j==1)then
    genome(1)=k
    linkers(k)%virtual=.false.
    nn=nn+1
+   write(6,*)j/real(n_linkers),genome(j)
    cycle add_linkers
   end if
 ! overlap?
@@ -335,6 +335,7 @@ program zif_generator
   nn=0
   genome(j)=k
   linkers(k)%virtual=.false.
+  write(6,*)j/real(n_linkers),genome(j)
  end do add_linkers
  write(6,'(80a)')('=',l=1,80)
  write(6,'(20(a5,1x))')( linker_type(i),i=1,linker_type_number )
@@ -346,8 +347,18 @@ program zif_generator
   l=randint(1,n_linkers,seed)  ! l:=position of linker in genome
   j=genome( l )                          ! j old linker 
   k=ensemble(l,randint(1,n_files,seed))  ! k new posible linker
+  nn=0 !counter MC choose
   do while (k==j.or.linkers(k)%virtual.eqv..false.)
-   k=ensemble(j,randint(1,n_files,seed))
+   if(nn>=10)then
+    write(6,'(a)')'mc difisile'
+    l=randint(1,n_linkers,seed)
+    j=genome( l )
+    k=ensemble(l,randint(1,n_files,seed))
+    nn=0
+   else
+    k=ensemble(j,randint(1,n_files,seed))
+    nn=nn+1
+   end if
   end do
   genome(l) = k                     ! test linker-k
   linkers(j)%virtual=.true.         ! j <- virtual
@@ -357,10 +368,11 @@ program zif_generator
    genome(l) = j                    ! rechazo el cambio
    linkers(k)%virtual=.true.        ! k <- virtual
    linkers(j)%virtual=.false.       ! j <- real
-  else
-   write(6,'((i5,1x,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
-   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   end if
+  !else
+  write(6,'((i5,1x,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+  !end if
  end do mc_exchange_linkers
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
  call writeCIFFile_from_clusters()
@@ -416,12 +428,7 @@ program zif_generator
        ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
       end forall
       call make_distances(cell_0,ouratom,atom,rv,r)
-      !if((linkers(genome(i))%component_label/='H1').and.&
-      !   (linkers(genome(j))%component_label/='H1'))then
-      ! cost_exchange = cost_exchange + 0.4*((2.5/r)**12-(2.5/r)**6)
-      !else
-       cost_exchange = cost_exchange + 0.04*((2.5/r)**12-(2.5/r)**6)
-      !end if
+      cost_exchange = cost_exchange + 0.04*((2.5/r)**12-(2.5/r)**6)
      end do
     end do
    end do
