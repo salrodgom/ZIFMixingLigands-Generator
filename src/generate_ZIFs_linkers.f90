@@ -89,7 +89,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=10
+ integer             :: mc_steps,mc_max_steps=100
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -370,7 +370,7 @@ program zif_generator
    linkers(j)%virtual=.false.       ! j <- real
   end if
   !else
-  write(6,'((i5,1x,f14.7,1x,f14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+  write(6,'((i5,1x,e14.7,1x,e14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   !end if
  end do mc_exchange_linkers
