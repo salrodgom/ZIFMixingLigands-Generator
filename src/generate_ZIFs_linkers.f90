@@ -323,7 +323,7 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if( rrr <= 1.0 ) then
+     if( rrr <= 0.50 ) then
       j=j-1
       nn=nn+1
       cycle add_linkers         ! overlap !!!
@@ -406,21 +406,33 @@ program zif_generator
   end do
   return
  end function  cost_molar
+ real function cost_per_linker(identi)
+  implicit none
+  integer,intent(in) :: identi
+  integer            :: ii
+  cost_per_linker=0.0
+  do i=1,n_linkers
+   if(i/=identi)then
+    do ii=
+   end if
+  end do
+  return
+ end function cost_per_linker
  real function cost_exchange()
   implicit none 
   integer               :: i,j,ii,jj,k
   real                  :: r
   cost_exchange=0.0
   do i=1,n_linkers
-   if(linkers(genome(i))%virtual.eqv..true.) then
-    write(6,*)( linkers(genome(i))%virtual,ii=1,n_linkers )
-    stop 'genome with virtual linker'
-   end if
+   !if(linkers(genome(i))%virtual.eqv..true.) then
+   ! write(6,*)( linkers(genome(i))%virtual,ii=1,n_linkers )
+   ! stop 'genome with virtual linker'
+   !end if
    do j=i+1,n_linkers
-    if(linkers(genome(j))%virtual.eqv..true.)then
-     write(6,*)( linkers(genome(j))%virtual,ii=1,n_linkers )
-     stop 'genome with virtual linker'
-    end if
+    !if(linkers(genome(j))%virtual.eqv..true.)then
+    ! write(6,*)( linkers(genome(j))%virtual,ii=1,n_linkers )
+    ! stop 'genome with virtual linker'
+    !end if
     do ii=1,linkers(genome(i))%n_components
      do jj=1,linkers(genome(j))%n_components
       forall (k=1:3)
