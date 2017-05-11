@@ -89,7 +89,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=100
+ integer             :: mc_steps,mc_max_steps=500
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -344,19 +344,19 @@ program zif_generator
  mc_steps=0
  mc_exchange_linkers: do mc_steps=1,mc_max_steps !while !(mc_steps<=mc_max_steps.or.solera<=solera_max)
   rrr = cost()
-  l=randint(1,n_linkers,seed)  ! l:=position of linker in genome
-  j=genome( l )                          ! j old linker 
-  k=ensemble(l,randint(1,n_files,seed))  ! k new posible linker
-  nn=0 !counter MC choose
+  call choose_by_comfort( l )            ! l:= position of linker in genome
+  j=genome( l )                          ! j:= old linker 
+  k=ensemble(l,randint(1,n_files,seed))  ! k:= new posible linker
+  nn=0                                   !counter MC choose
   do while (k==j.or.linkers(k)%virtual.eqv..false.)
    if(nn>=10)then
     write(6,'(a)')'mc difisile'
-    l=randint(1,n_linkers,seed)
+    call choose_by_comfort( l )
     j=genome( l )
     k=ensemble(l,randint(1,n_files,seed))
     nn=0
    else
-    k=ensemble(j,randint(1,n_files,seed))
+    k=ensemble(l,randint(1,n_files,seed))
     nn=nn+1
    end if
   end do
@@ -406,14 +406,65 @@ program zif_generator
   end do
   return
  end function  cost_molar
+ subroutine update_comfortably()
+  ! Linker well-being allocations in the ensamble:
+  implicit none
+  integer :: i
+  real    :: base_comfort = 0.0
+  real    :: comfort(n_linkers),total_comfort
+  comfort=0.0
+  total_comfort=0.0
+  do i=1,n_linkers
+   linkers(genome(i))%comfortably = cost_per_linker(i)
+   comfort(i) = linkers(genome(i))%comfortably
+  end do
+  base_comfort = minval(comfort)
+  comfort(1:n_linkers)=comfort(1:n_linkers)-base_comfort
+  total_comfort= sum(comfort) 
+  linkers(genome(1:n_linkers))%comfortably = comfort(1:n_linkers)/total_comfort
+  !write(6,*)'Base:',base_comfort,'Total comfort:',total_comfort ! debugging
+  !do i=1,n_linkers
+  ! write(6,*)'Comfort:',i,genome(i),linkers(genome(i))%code,linkers(genome(i))%comfortably 
+  !end do
+  return
+ end subroutine update_comfortably
+ subroutine choose_by_comfort(choosen)
+  implicit none
+  integer,intent(inout) :: choosen
+  integer :: ii
+  real :: comfort(n_linkers)
+  real :: sum_weight, eta
+  call update_comfortably()
+  sum_weight = sum( linkers(genome(1:n_linkers ))%comfortably  )  
+  eta = r4_uniform(0.0, sum_weight, seed)
+  do choosen = 1, n_linkers
+    if ( eta < linkers(genome(choosen))%comfortably ) exit
+    eta = eta - linkers(genome(choosen))%comfortably
+  end do
+  !do ii=1,n_linkers  ! debugging
+  ! write(6,*)ii,linkers(genome(ii))%comfortably,choosen
+  !end do
+  return
+ end subroutine choose_by_comfort
  real function cost_per_linker(identi)
+  ! 11 may 2017
   implicit none
   integer,intent(in) :: identi
-  integer            :: ii
+  integer            :: ii,jj,k 
+  real               :: r
   cost_per_linker=0.0
   do i=1,n_linkers
    if(i/=identi)then
-    do ii=
+    do ii=1,linkers(genome(i))%n_components
+     do jj=1,linkers(genome(identi))%n_components
+      forall (k=1:3)
+       atom(k)=linkers(genome(identi))%component_xcrystal(k,jj)
+       ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
+      end forall
+      call make_distances(cell_0,ouratom,atom,rv,r)
+      cost_per_linker = cost_per_linker + 0.04*((2.5/r)**12-(2.5/r)**6)
+     end do
+    end do
    end if
   end do
   return
