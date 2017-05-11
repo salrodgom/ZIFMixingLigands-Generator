@@ -85,7 +85,7 @@ program zif_generator
  real                :: atom(3),ouratom(3)
  integer             :: num_args
  real,parameter      :: r_min_criteria_connectivity=0.56
- integer,parameter   :: max_number_tries=10000
+ integer,parameter   :: max_number_tries=1000
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
@@ -114,6 +114,7 @@ program zif_generator
   character(len=2)          :: component_label(100)
   real                      :: comfortably
   logical                   :: virtual
+  real                      :: population
  end type
  type(cluster),allocatable  :: linkers(:) 
  integer,allocatable        :: ensemble(:,:)
@@ -263,6 +264,7 @@ program zif_generator
    if(i==1) then
     nodes(j)%id=j
     nodes(j)%code='Zn'
+    nodes(j)%population=1.0
     nodes(j)%n_components=1
     nodes(j)%virtual=.false.
     read(line,*) nodes(j)%component_label(1),(nodes(j)%component_xcrystal(m,1),m=1,3),rrr
@@ -272,6 +274,7 @@ program zif_generator
    h=h+1                           ! count total number of linkers
    linkers(h)%id=h
    linkers(h)%code=code
+   linkers(h)%population=molar_fraction
    linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
    linkers(h)%virtual=.true.
    ensemble(j,i)=linkers(h)%id     ! registro de linker en file
@@ -290,7 +293,9 @@ program zif_generator
  genome=0 ! lista de linkers
  nn=0
  add_linkers: do 
-  if(nn==max_number_tries) then
+  if(j==n_linkers) exit add_linkers
+  j=j+1
+  if(nn>=max_number_tries) then
    j=0       ! if the number of tries is bigger than a limit, 
    genome=0  ! we start again with the first ligand.
    nn=0
@@ -298,14 +303,16 @@ program zif_generator
    write(6,'(a)')'[warning] Relocation this ligands is hard, check the input'
    cycle add_linkers
   end if
-  if(j==n_linkers) exit add_linkers
-  j=j+1
-  k=ensemble(j,randint(1,n_files,seed))
+  !else if (nn>=10) then
+   k=ensemble(j,randint(1,n_files,seed))
+  !else
+  ! call choose_by_molar_fraction(j,k)
+  !end if
   if(j==1)then
    genome(1)=k
    linkers(k)%virtual=.false.
    nn=nn+1
-   write(6,*)j/real(n_linkers),genome(j)
+   write(6,*)j/real(n_linkers),genome(j),nn
    cycle add_linkers
   end if
 ! overlap?
@@ -323,7 +330,7 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if( rrr <= 0.50 ) then
+     if( rrr <= 1.0 ) then
       j=j-1
       nn=nn+1
       cycle add_linkers         ! overlap !!!
@@ -332,13 +339,14 @@ program zif_generator
    end do
   end do
   ! great!
-  nn=0
   genome(j)=k
   linkers(k)%virtual=.false.
-  write(6,*)j/real(n_linkers),genome(j)
+  write(6,*)j/real(n_linkers),genome(j),nn
+  nn=0
  end do add_linkers
  write(6,'(80a)')('=',l=1,80)
  write(6,'(20(a5,1x))')( linker_type(i),i=1,linker_type_number )
+ write(6,'(20(f10.8,1x))') ( linker_type_molar_fraction(i), i=1,linker_type_number )
  write(6,'((1000(i6,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
  mc_steps=0
@@ -346,16 +354,20 @@ program zif_generator
   rrr = cost()
   call choose_by_comfort( l )            ! l:= position of linker in genome
   j=genome( l )                          ! j:= old linker 
+  !call choose_by_molar_fraction(l,k)
   k=ensemble(l,randint(1,n_files,seed))  ! k:= new posible linker
   nn=0                                   !counter MC choose
-  do while (k==j.or.linkers(k)%virtual.eqv..false.)
+  do while (k==j)
+   !.or.linkers(k)%virtual.eqv..false.)
    if(nn>=10)then
     write(6,'(a)')'mc difisile'
     call choose_by_comfort( l )
     j=genome( l )
+    !call choose_by_molar_fraction(l,k)
     k=ensemble(l,randint(1,n_files,seed))
     nn=0
    else
+    !call choose_by_molar_fraction(l,k)
     k=ensemble(l,randint(1,n_files,seed))
     nn=nn+1
    end if
@@ -370,7 +382,7 @@ program zif_generator
    linkers(j)%virtual=.false.       ! j <- real
   end if
   !else
-  write(6,'((i5,1x,e14.7,1x,e14.7,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+  write(6,'((i5,1x,e20.10,1x,e20.10,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   !end if
  end do mc_exchange_linkers
@@ -398,7 +410,7 @@ program zif_generator
   real             ::  molar_constant=1
   integer          ::  abc
   call update_molar_fraction()
-  molar_constant=10000 !0.5*real(n_linkers**3)
+  molar_constant=1000000 !real(n_linkers**3)
   cost_molar=0.0
   do abc=1,linker_type_number
    cost_molar=cost_molar+&
@@ -412,22 +424,52 @@ program zif_generator
   integer :: i
   real    :: base_comfort = 0.0
   real    :: comfort(n_linkers),total_comfort
+  real    :: infinity = huge(0.0)
   comfort=0.0
   total_comfort=0.0
   do i=1,n_linkers
    linkers(genome(i))%comfortably = cost_per_linker(i)
+   if( linkers(genome(i))%comfortably /= linkers(genome(i))%comfortably ) then
+   !if( isnan( linkers(genome(i))%comfortably ) ) then
+   ! By definition, NAN is not equal to anything, even itself.
+    linkers(genome(i))%comfortably=infinity
+   end if
    comfort(i) = linkers(genome(i))%comfortably
   end do
   base_comfort = minval(comfort)
   comfort(1:n_linkers)=comfort(1:n_linkers)-base_comfort
   total_comfort= sum(comfort) 
+  ! check to see if your variable is infinity by:
+  if( total_comfort > infinity ) total_comfort = infinity
   linkers(genome(1:n_linkers))%comfortably = comfort(1:n_linkers)/total_comfort
   !write(6,*)'Base:',base_comfort,'Total comfort:',total_comfort ! debugging
   !do i=1,n_linkers
-  ! write(6,*)'Comfort:',i,genome(i),linkers(genome(i))%code,linkers(genome(i))%comfortably 
+  ! write(6,*)'Comfort:',i,genome(i),linkers(genome(i))%code,linkers(genome(i))%comfortably,cost_per_linker(i)
   !end do
   return
  end subroutine update_comfortably
+ subroutine choose_by_molar_fraction(pivot,choosen)
+  implicit none
+  integer             :: ii,k
+  integer,intent(in)  :: pivot
+  integer,intent(out) :: choosen
+  real                :: sum_weight, eta
+  real                :: weight(n_files)
+  do ii=1,n_files
+   weight(ii)=linkers(ensemble(pivot,ii))%population 
+  end do
+  sum_weight = sum( weight(1:n_files ) )
+  eta = r4_uniform(0.0, sum_weight, seed)
+  do choosen = 1, n_files
+    if ( eta <  linkers(ensemble(pivot,choosen))%population ) exit
+    eta = eta - linkers(ensemble(pivot,choosen))%population
+  end do 
+  !do ii=1,n_files  ! debugging
+  ! write(6,*)ii,linkers(ensemble(pivot,ii))%population,linkers(ensemble(pivot,ii))%code,&
+  ! linkers(ensemble(pivot,ii))%n_components,choosen,eta
+  !end do
+  return 
+ end subroutine choose_by_molar_fraction
  subroutine choose_by_comfort(choosen)
   implicit none
   integer,intent(inout) :: choosen
@@ -438,12 +480,13 @@ program zif_generator
   sum_weight = sum( linkers(genome(1:n_linkers ))%comfortably  )  
   eta = r4_uniform(0.0, sum_weight, seed)
   do choosen = 1, n_linkers
-    if ( eta < linkers(genome(choosen))%comfortably ) exit
+    if ( eta <  linkers(genome(choosen))%comfortably ) exit
     eta = eta - linkers(genome(choosen))%comfortably
   end do
   !do ii=1,n_linkers  ! debugging
   ! write(6,*)ii,linkers(genome(ii))%comfortably,choosen
   !end do
+  !if(choosen>n_linkers) stop 'choosen > n_linkers'
   return
  end subroutine choose_by_comfort
  real function cost_per_linker(identi)
@@ -467,6 +510,8 @@ program zif_generator
     end do
    end if
   end do
+  if( cost_per_linker > 1.0e12 ) cost_per_linker = 1.0e12
+  if( cost_per_linker /= cost_per_linker ) cost_per_linker= 1.0e12
   return
  end function cost_per_linker
  real function cost_exchange()
@@ -479,22 +524,24 @@ program zif_generator
    ! write(6,*)( linkers(genome(i))%virtual,ii=1,n_linkers )
    ! stop 'genome with virtual linker'
    !end if
-   do j=i+1,n_linkers
-    !if(linkers(genome(j))%virtual.eqv..true.)then
-    ! write(6,*)( linkers(genome(j))%virtual,ii=1,n_linkers )
-    ! stop 'genome with virtual linker'
-    !end if
-    do ii=1,linkers(genome(i))%n_components
-     do jj=1,linkers(genome(j))%n_components
-      forall (k=1:3)
-       atom(k)=linkers(genome(j))%component_xcrystal(k,jj)
-       ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
-      end forall
-      call make_distances(cell_0,ouratom,atom,rv,r)
-      cost_exchange = cost_exchange + 0.04*((2.5/r)**12-(2.5/r)**6)
-     end do
-    end do
-   end do
+   !do j=i+1,n_linkers
+   ! !if(linkers(genome(j))%virtual.eqv..true.)then
+   ! ! write(6,*)( linkers(genome(j))%virtual,ii=1,n_linkers )
+   ! ! stop 'genome with virtual linker'
+   ! !end if
+   ! do ii=1,linkers(genome(i))%n_components
+   !  do jj=1,linkers(genome(j))%n_components
+   !   forall (k=1:3)
+   !    atom(k)=linkers(genome(j))%component_xcrystal(k,jj)
+   !    ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
+   !   end forall
+   !   call make_distances(cell_0,ouratom,atom,rv,r)
+   !   cost_exchange = cost_exchange + 0.04*((2.5/r)**12-(2.5/r)**6)
+   !  end do
+   ! end do
+   !end do
+   !write(6,*) cost_per_linker(i)
+   cost_exchange= cost_exchange+cost_per_linker(i)
   end do
   return
  end function cost_exchange
