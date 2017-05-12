@@ -85,11 +85,12 @@ program zif_generator
  real                :: atom(3),ouratom(3)
  integer             :: num_args
  real,parameter      :: r_min_criteria_connectivity=0.56
+ real,parameter      :: r_min_criteria_overlap = 1.0
  integer,parameter   :: max_number_tries=1000
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=500
+ integer             :: mc_steps,mc_max_steps=1000
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -330,7 +331,7 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if( rrr <= 1.0 ) then
+     if( rrr <= r_min_criteria_overlap ) then
       j=j-1
       nn=nn+1
       cycle add_linkers         ! overlap !!!
