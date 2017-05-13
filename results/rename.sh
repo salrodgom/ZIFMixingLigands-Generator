@@ -1,5 +1,5 @@
 #!/bin/bash
-for file in *.txt ; do
+for file in *mixture.txt ; do
  # GME_imi_0.80_bim_.20_mixture.txt
  CIFFile=$(echo $file | sed 's/\.txt/\.cif/g')
  topol=$(echo $file | sed 's/_/ /g' | awk '{print $1}')

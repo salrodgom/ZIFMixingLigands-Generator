@@ -7,7 +7,7 @@ program zif_cif2gin
  real                :: r = 1.0e12
 !parameters
  real,parameter      :: k_B = 8.617332478e-5
- real,parameter      :: r_min_criteria_connectivity=0.2
+ real,parameter      :: r_min_criteria_connectivity=0.15
  INTEGER, PARAMETER  :: muchisimo=100000
 ! variables
  integer             :: num_args
@@ -210,11 +210,13 @@ program zif_cif2gin
    end forall
    call make_distances(cell_0,ratom,rouratom,rv,r)
    DistanceMatrix(i,j)=r
-   if(r>0.1.and.r<=atom(i)%radius+atom(j)%radius+r_min_criteria_connectivity)then
-    !.and.&
-    !  (atom(i)%element/=1.and.atom(j)%element/=1) )then
-    k=k+1
-    ConnectedAtoms(i,j)=.true.
+   if((r>0.1.and.r<=atom(i)%radius+atom(j)%radius+r_min_criteria_connectivity))then!.and.&
+    if( atom(i)%element==1.and.atom(j)%element==1) then
+     ConnectedAtoms(i,j)=.false.
+    else
+     k=k+1
+     ConnectedAtoms(i,j)=.true.
+    end if
    end if
   end do
   atom(i)%degree=k
@@ -249,33 +251,48 @@ program zif_cif2gin
   scan_for_rename_carbon_atoms: do i=1,n_atoms
    !second, C-atoms:
    if( atom(i)%element==6 ) then
+    m=0  !H-counter
     h=0 ! N-counter
     l=0 ! C-counter
-    scan_for_N_C_atoms: do j=1,n_atoms
+    scan_for_H_N_C_atoms: do j=1,n_atoms
      if( i/=j.and.ConnectedAtoms(i,j) )then
+      if( atom(j)%element==1 ) m=m+1
       if( atom(j)%element==7 ) h=h+1 
       if( atom(j)%element==6 ) l=l+1
      end if
-    end do scan_for_N_C_atoms
-    if( h==1 .and. l==1 ) then
+    end do scan_for_H_N_C_atoms
+    if( m==1 .and. h==1 .and. l==1 ) then
      atom(i)%new_label = "C2  "
      atom(i)%charge = -0.0839
-    else if ( h==2 .and. l==0 ) then
+    else if ( m==1 .and. h==2 .and. l==0 ) then
      atom(i)%new_label = "C4  "
      atom(i)%charge =  +0.259300001
-    else if ( h==2 .and. l==1 ) then
+    else if ( m==0.and.h==2 .and. l==1 ) then
      atom(i)%new_label = "C1  "
      atom(i)%charge = +0.4291
-    else if ( h==0 .and. l==1 ) then
+    else if ( m==3 .and. h==0 .and. l==1 ) then
      atom(i)%new_label = "C3  "
      atom(i)%charge = -0.4526
-    else if ( h==1 .and. l==2 ) then
+    else if ( m==0 .and. h==1 .and. l==2 ) then
      atom(i)%new_label = "C5  "
      atom(i)%charge = +0.0
-    else if ( h==0 .and. l==2 ) then
+    else if ( m==1 .and. h==0 .and. l==2 ) then
      atom(i)%new_label = "C6  "
      atom(i)%charge = -0.09835
+    else if ( m==1 .and. h==1 .and. l==2 ) then
+     scan_for_H_fake_conections: do j=1,n_atoms
+      if( i/=j.and.ConnectedAtoms(i,j).and.atom(j)%element==1 )then
+       ConnectedAtoms(i,j)=.false. 
+       ConnectedAtoms(j,i)=.false.
+       atom(i)%new_label = "C5  "
+       atom(i)%charge = +0.0
+       exit scan_for_H_fake_conections
+      end if
+     end do scan_for_H_fake_conections
     else
+     write(6,*)'HNC'
+     write(6,*)m,h,l
+     
      stop 'unknow C-atom'
     end if
    end if
@@ -297,7 +314,13 @@ program zif_cif2gin
       else if( atom(j)%new_label == "C6  " ) then
        atom(i)%new_label = "H1  "
        atom(i)%charge = +0.1128
+      else if( atom(j)%new_label == "C5  " ) then
+       ConnectedAtoms(i,j)=.false.
+       ConnectedAtoms(j,i)=.false.
+       atom(i)%degree=atom(i)%degree-1
+       atom(j)%degree=atom(j)%degree-1
       else
+       write(6,*) atom(j)%new_label
        stop 'unknow H-atom'
       end if
       cycle scan_for_rename_H_atoms

@@ -4,7 +4,7 @@ nCPU=16
 # functions:
 function count_used_CPUs {
  n_used=0
- for process in "simulate" "lmp_mpi" "gulp" ; do
+ for process in "simulate" "lmp_mpi" "gulp" "cif2lammps" "generator" ; do
   n=$(ps aux | grep ${process} | sed '/grep/d' | wc -l | awk '{print $1}')
   n_used=$((${n}+${n_used}))
  done
@@ -56,8 +56,11 @@ for CIFFile in *.cif ; do
  get_seed
  folder=$(echo $CIFFile | sed 's/\.cif//g')
  if [ ! -d $folder ] ; then
+  echo "Optimisating structure ${folder}:"
   mkdir $folder
-  cp forcefield.lib in.lmp $CIFFile $folder
+  mv $CIFFile $folder/.
+  mv ${folder}.txt /.
+  cp forcefield.lib in.lmp $folder
   cp lammpstrj2pdb pdb2cif cif2lammps $folder/.
   cd $folder
    ./cif2lammps -c $CIFFile -wq -S > out_cif2lammps_${folder}.txt
@@ -74,5 +77,9 @@ for CIFFile in *.cif ; do
     echo "cif2lammps ERROR"
    fi
   cd ..
+ else
+  echo "Already optimised structure ${folder}:"
+  mv $CIFFile $folder/.
+  mv ${folder}.txt $folder/.
  fi
 done
