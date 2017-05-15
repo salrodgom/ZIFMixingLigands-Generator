@@ -53,9 +53,9 @@ program pdb2cif
        read(line(39:46),*) xinbox(2,id(i))
        read(line(47:54),*) xinbox(3,id(i))
        label(id(i))= line(13:14)
-       forall ( j = 1:3 )
-        average(j)=average(j)+xinbox(j,id(i))/real(n_atoms)
-       end forall
+       !forall ( j = 1:3 )
+       ! average(j)=average(j)+xinbox(j,id(i))/real(n_atoms)
+       !end forall
  enddo read_coor_pdb
  read (100,'(a)') line
  coor_pdb: do i=1,n_atoms ! definimos las coordenadas cartesianas
