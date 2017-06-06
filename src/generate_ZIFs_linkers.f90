@@ -207,6 +207,12 @@ program zif_generator
  write(6,*)n_linkers,'linkers/uc'
  write(6,*)n_files, 'files detected'
  write(6,*)n_files*n_linkers,' total linkers spected'
+ h=0
+ do i=1,linker_type_number
+  h=h+int(linker_type_molar_fraction(i)*n_linkers)
+ end do
+ write(6,*)(int(linker_type_molar_fraction(i)*n_linkers),i=1,linker_type_number),n_linkers-h
+ write(6,*)"=================#"
  h=0 ! count total number of linkers
  write(6,'(80a)')('=',j=1,80)
  do i=1,n_files
@@ -383,10 +389,11 @@ program zif_generator
    linkers(j)%virtual=.false.       ! j <- real
   end if
   !else
-  write(6,'((i5,1x,e20.10,1x,e20.10,1x,f14.7,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+  write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   !end if
  end do mc_exchange_linkers
+ 
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
  call writeCIFFile_from_clusters()
  stop
@@ -411,7 +418,7 @@ program zif_generator
   real             ::  molar_constant=1
   integer          ::  abc
   call update_molar_fraction()
-  molar_constant=1000000 !real(n_linkers**3)
+  molar_constant=1e20 !real(n_linkers**3)
   cost_molar=0.0
   do abc=1,linker_type_number
    cost_molar=cost_molar+&
@@ -496,6 +503,10 @@ program zif_generator
   integer,intent(in) :: identi
   integer            :: ii,jj,k 
   real               :: r
+  real               :: ell=201300.0
+  real               :: rll=3.9
+  real               :: rml=1.9
+  real               :: eml=500.0
   cost_per_linker=0.0
   do i=1,n_linkers
    if(i/=identi)then
@@ -506,11 +517,21 @@ program zif_generator
        ouratom(k)=linkers(genome(i))%component_xcrystal(k,ii)
       end forall
       call make_distances(cell_0,ouratom,atom,rv,r)
-      cost_per_linker = cost_per_linker + 0.04*((2.5/r)**12-(2.5/r)**6)
+      cost_per_linker = cost_per_linker + ell*((rll/r)**12-2*(rll/r)**6)
      end do
     end do
    end if
   end do
+  !do i=1,n_nodes
+  ! do ii=1,linkers(genome(identi))%n_components
+  !  forall (k=1:3)
+  !   atom(k)=linkers(genome(identi))%component_xcrystal(k,ii)
+  !   ouratom(k)=nodes(i)%component_xcrystal(k,ii)
+  !  end forall
+  !  call make_distances(cell_0,ouratom,atom,rv,r)
+  !  cost_per_linker = cost_per_linker + eml*((rml/r)**12-2*(rml/r)**6)
+  ! end do
+  !end do
   if( cost_per_linker > 1.0e12 ) cost_per_linker = 1.0e12
   if( cost_per_linker /= cost_per_linker ) cost_per_linker= 1.0e12
   return
