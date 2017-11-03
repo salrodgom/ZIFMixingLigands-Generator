@@ -387,11 +387,12 @@ program zif_generator
    genome(l) = j                    ! rechazo el cambio
    linkers(k)%virtual=.true.        ! k <- virtual
    linkers(j)%virtual=.false.       ! j <- real
-  end if
-  !else
-  write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
-   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
   !end if
+  else
+                                    ! acepto el cambio e imprimo
+   write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+  end if
  end do mc_exchange_linkers
  
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
@@ -418,7 +419,7 @@ program zif_generator
   real             ::  molar_constant=1
   integer          ::  abc
   call update_molar_fraction()
-  molar_constant=1e20 !real(n_linkers**3)
+  molar_constant=1e17 !real(n_linkers**3)
   cost_molar=0.0
   do abc=1,linker_type_number
    cost_molar=cost_molar+&
