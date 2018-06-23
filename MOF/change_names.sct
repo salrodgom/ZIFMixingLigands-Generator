@@ -1,0 +1,12 @@
+#!/bin/bash
+for structure in CP1 LP1 ; do
+ # zif_CAN_cif_gin_all > mof_LP1_cif_gin_all
+ folder=mof_${structure}_cif_gin_all
+ cd $folder
+  #IRMOF10_interpen_symm_ligand1cp_label_d.cif > zif_tbp_nim_AFI_d.cif
+  for file in IRMOF10_*.cif ; do
+   echo "$file > $(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand1../li1/g' | sed 's/ligand2../li2/g' | sed "s/label/$structure/g" )"
+   #mv $file $(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand1../li1/g' | sed 's/ligand2../li2/g' | sed "s/label/$structure/g" )
+  done 
+ cd ..
+done
