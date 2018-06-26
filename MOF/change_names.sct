@@ -4,9 +4,12 @@ for structure in CP1 LP1 ; do
  folder=mof_${structure}_cif_gin_all
  cd $folder
   #IRMOF10_interpen_symm_ligand1cp_label_d.cif > zif_tbp_nim_AFI_d.cif
+  #IRMOF10_interpen_symm_ligand3cp_label_j_1.cif
+  #IRMOF10_interpen_symm_ligand11cp_label_m_1.cif
   for file in IRMOF10_*.cif ; do
-   echo "$file > $(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand1../li1/g' | sed 's/ligand2../li2/g' | sed "s/label/$structure/g" )"
-   #mv $file $(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand1../li1/g' | sed 's/ligand2../li2/g' | sed "s/label/$structure/g" )
+   new_file=$(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand3../li3/g' | sed 's/ligand4../li4/g' | sed 's/ligand11../li5/g'| sed "s/label/$structure/g" )
+   echo "$file > $new_file"
+   mv $file $new_file
   done 
  cd ..
 done
