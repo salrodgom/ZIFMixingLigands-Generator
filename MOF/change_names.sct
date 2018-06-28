@@ -1,15 +1,33 @@
 #!/bin/bash
+alphabet=( {a..z} {A..Z} )
+function convertToString(){
+    dividend="$1"
+    colName=""
+    size=${#alphabet[@]}
+    while (( dividend > 0 ))
+    do
+         mod=$(( (dividend-1)%size ))
+         colName="${alphabet[$mod]}$colName"
+         dividend=$(( (dividend-mod)/size ))
+    done
+}
 for structure in CP1 LP1 ; do
- # zif_CAN_cif_gin_all > mof_LP1_cif_gin_all
  folder=mof_${structure}_cif_gin_all
  cd $folder
-  #IRMOF10_interpen_symm_ligand1cp_label_d.cif > zif_tbp_nim_AFI_d.cif
-  #IRMOF10_interpen_symm_ligand3cp_label_j_1.cif
-  #IRMOF10_interpen_symm_ligand11cp_label_m_1.cif
   for file in IRMOF10_*.cif ; do
    new_file=$(echo $file | sed 's/IRMOF10_interpen_symm/mof_int/g' | sed 's/ligand3../li3/g' | sed 's/ligand4../li4/g' | sed 's/ligand11../li5/g'| sed "s/label/$structure/g" )
    echo "$file > $new_file"
    mv $file $new_file
   done 
  cd ..
+done
+for topology in CP1 LP1 ; do
+ for nlig in 3 4 5 ; do
+  h=0
+  for file in mof_${topology}_cif_gin_all/mof_int_li${nlig}_${topology}_?_?.cif ; do
+   let h++
+   convertToString $h
+   mv $file mof_${topology}_cif_gin_all/mof_int_li${nlig}_${topology}_${colName}.cif
+  done
+ done
 done

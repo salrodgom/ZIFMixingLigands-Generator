@@ -69,8 +69,8 @@ program zif_generator
  use mod_random
 ! use topology_agents,only generate
  implicit none
- integer             :: i,j,k,l,h,z,m,ierr,nn,seed
- integer             :: linker_type_max=4
+ integer             :: i,j,k,l,h,z,m,ierr,nn,seed,iiii
+ integer             :: linker_type_max=10
  integer             :: ii,jj,kk
  real                :: rrr,ppp,qqq
  real                :: atom(3),ouratom(3)
@@ -78,20 +78,20 @@ program zif_generator
  real,parameter      :: r_min_criteria_connectivity=0.56
  real,parameter      :: r_min_criteria_overlap = 1.0
  integer,parameter   :: max_number_tries=1000
- integer             :: n_atoms = 0,n_nodes=0,n_linkers
+ integer             :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=100
- integer             :: solera,solera_max=10
- character(len=3)    :: topology = "AFI"
+ integer             :: mc_steps, mc_max_steps=500
+ character(len=3)    :: topology = "Xxx"
  character(len=20)   :: spam
  character(len=100)  :: CIFFilename=" "
  character(len=100)  :: filename=" "
  character(len=80)   :: string_stop_head= "_atom_site_occupancy"
- character(len=100)  :: line,string
+ character(len=100)  :: line, string
  character(len=100), dimension(:), allocatable :: args
  character(len=3),dimension(:),allocatable     :: linker_type
  integer                                       :: linker_type_number = 1
+ real, allocatable                             :: eee(:)
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
  integer,dimension(:),allocatable              :: genome
  integer,dimension(:),allocatable              :: histogram_molar_fraction
@@ -101,9 +101,10 @@ program zif_generator
   character(len=3)          :: code
   integer                   :: n_components
   integer                   :: id
-  real                      :: component_xcrystal(1:3,1:100)
-  real                      :: component_size(100)
-  character(len=2)          :: component_label(100)
+  real                      :: component_xcrystal(1:3,1:500)
+  real                      :: component_size(500)
+  character(len=2)          :: component_label(500)
+  character(len=2)          :: element(500)
   real                      :: comfortably
   logical                   :: virtual
   real                      :: population
@@ -173,6 +174,8 @@ program zif_generator
   read(111,'(a)',iostat=ierr) line 
   if(ierr/=0) exit
   read(line(1:41),'(a)') CIFFilename
+  CIFFilename=adjustl(trim(CIFFilename))
+  write(6,'(a,1x,a1)')CIFFilename,'#'
   read(line(42:),*) code,molar_fraction
   write(6,'(a,1x,a3,1x,f14.7)')trim(CIFFilename),trim(code),molar_fraction
   n_files=n_files+1
@@ -186,11 +189,10 @@ program zif_generator
     if(line(1:2)=='Zn') n_nodes=n_nodes+1
    end do
    close(121)
-   !OXOCLUSTER ---
-   ! 23 components
-   n_nodes=int(real(n_nodes)/4.0)
+   call check_topology_composition(topology,n_metals,n_nodes,n_linkers)
+   !n_nodes=int(real(n_nodes)/4.0)
    !--------------
-   n_linkers=n_nodes*2
+   !n_linkers=n_nodes*2
   end if
  end do
  rewind(111)
@@ -263,27 +265,19 @@ program zif_generator
    if(line(1:)==string_stop_head) exit
   end do
   do j=1,n_nodes
-   !read(100,'(a)') line
-   !if(i==1) then
-   ! nodes(j)%id=j
-   ! nodes(j)%code='oxo'
-   ! nodes(j)%population=1.0
-   ! nodes(j)%n_components=23
-   ! nodes(j)%virtual=.false.
-   ! !read(line,*) nodes(j)%component_label(1),(nodes(j)%component_xcrystal(m,1),m=1,3),rrr
-   !end if
    z=z+1
    nodes(z)%id=z 
    nodes(z)%code='oxo'
    nodes(z)%population=1.0
-   nodes(z)%n_components=23
+   call check_cluster_type( nodes(z)%code , nodes(z)%n_components )
    nodes(z)%virtual=.false.
    write(6,'(a)')'=============='
-   write(6,'(a,1x,i3)')"Node: ",z
+   write(6,'(a,1x,i3,1x,a,1x,a)')"Node: ",z,"Code:", nodes(z)%code
+   write(6,'(a,1x,i3)')"# of components:", nodes(z)%n_components
    do k=1,nodes(z)%n_components
     read(100,*) nodes(z)%component_label(k),&
      ( nodes(z)%component_xcrystal(m,k),m=1,3),rrr
-    call check_atom_type(nodes(z)%component_label(k),nodes(z)%component_size(k))
+    call check_atom_type(nodes(z)%component_label(k),nodes(z)%component_size(k),nodes(z)%element(k))
     write(6,*)nodes(z)%component_label(k),( nodes(z)%component_xcrystal(m,k),m=1,3)
    end do
   end do
@@ -293,16 +287,16 @@ program zif_generator
    linkers(h)%id=h
    linkers(h)%code=code
    linkers(h)%population=molar_fraction
-   ! all the nodes have the same number of components:
-   linkers(h)%n_components=int((n_atoms-n_nodes*nodes(1)%n_components)/n_linkers)
+   call check_cluster_type( linkers(h)%code , linkers(h)%n_components )
    linkers(h)%virtual=.true.
    ensemble(j,i)=linkers(h)%id     ! registro de linker en file
    write(6,'(a)')'=============='
-   write(6,'(a,1x,i3)')"Ligand: ",h
+   write(6,'(a,1x,i3,1x,a,1x,a)')"Ligand:",h,"Code:", linkers(h)%code
+   write(6,'(a,1x,i3)')"# of components:", linkers(h)%n_components
    do k=1,linkers(h)%n_components
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
-    call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k))
+    call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k),linkers(h)%element(k))
     write(6,*)linkers(h)%component_label(k),( linkers(h)%component_xcrystal(m,k),m=1,3)
    end do
   end do
@@ -311,10 +305,22 @@ program zif_generator
  end do
  close(111)
  call system('rm list tmp')
+ ! Detect the smallest ligand type:
+ ii=500
+ h=1
+ do j=1,linker_type_number
+  call check_cluster_type( linker_type(j), jj )
+  if( jj < ii ) then
+   h  = j
+   ii = jj
+  end if
+ end do
  j=0
  allocate(genome(n_linkers))
  genome=0 ! lista de linkers
  nn=0
+ write(6,'(a,a,a)') 'Allocating the structure with the smallest lingand type (',linker_type( h ),'):'
+ write(6,'(a)') '% Completed        Configuration'
  add_linkers: do 
   if(j==n_linkers) exit add_linkers
   j=j+1
@@ -327,40 +333,43 @@ program zif_generator
    cycle add_linkers
   end if
   k=ensemble(j,randint(1,n_files,seed))
+  do while ( linkers(k)%code /= linker_type( h ) )
+   k=ensemble(j,randint(1,n_files,seed))
+  end do
   if(j==1)then
    genome(1)=k
    linkers(k)%virtual=.false.
    nn=nn+1
-   write(6,*)j/real(n_linkers),genome(j),nn
+   write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
    cycle add_linkers
   end if
 ! overlap?
 ! 16.04.2017
-  do l=1,j-1 ! scan previous linkers
-   if(genome(l)==k) then
-    j=j-1
-    nn=nn+1
-    cycle add_linkers ! is it really new?
-   end if
-   do ii=1,linkers(genome(l))%n_components    
-    do jj=1,linkers(k)%n_components
-     do kk=1,3
-      atom(kk)=linkers(genome(l))%component_xcrystal(kk,ii)
-      ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
-     end do
-     call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if( rrr <= r_min_criteria_overlap ) then
-      j=j-1
-      nn=nn+1
-      cycle add_linkers         ! overlap !!!
-     end if
-    end do
-   end do
-  end do
+!  do l=1,j-1 ! scan previous linkers
+!   if(genome(l)==k) then
+!    j=j-1
+!    nn=nn+1
+!    cycle add_linkers ! is it really new?
+!   end if
+!   do ii=1,linkers(genome(l))%n_components    
+!    do jj=1,linkers(k)%n_components
+!     do kk=1,3
+!      atom(kk)=linkers(genome(l))%component_xcrystal(kk,ii)
+!      ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
+!     end do
+!     call make_distances(cell_0,ouratom,atom,rv,rrr)
+!     if( rrr <= r_min_criteria_overlap ) then
+!      j=j-1
+!      nn=nn+1
+!      cycle add_linkers         ! overlap !!!
+!     end if
+!    end do
+!   end do
+!  end do
+  write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
   ! great!
   genome(j)=k
   linkers(k)%virtual=.false.
-  write(6,*)j/real(n_linkers),genome(j),nn
   nn=0
  end do add_linkers
  write(6,'(80a)')('=',l=1,80)
@@ -368,56 +377,168 @@ program zif_generator
  write(6,'(20(f10.8,1x))') ( linker_type_molar_fraction(i), i=1,linker_type_number )
  write(6,'((1000(i6,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
+ call update_comfortably()
  mc_steps=0
- !write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
- !call writeCIFFile_from_clusters()
+ write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
+ call writeCIFFile_from_clusters()
  !stop
- mc_exchange_linkers: do mc_steps=1,mc_max_steps !while !(mc_steps<=mc_max_steps.or.solera<=solera_max)
-  rrr = cost()
-  call choose_by_comfort( l )            ! l:= position of linker in genome
-  j=genome( l )                          ! j:= old linker 
-  k=ensemble(l,randint(1,n_files,seed))  ! k:= new posible linker
+ rrr=0.0
+ mc_exchange_linkers: do mc_steps=1,n_linkers*n_linkers 
+  allocate(eee(0:1))
+  !rrr = cost()
+  !call choose_by_comfort( l )            ! l:= position of linker in genome
+  !j=genome( l )                          ! j:= old linker 
+  !k=ensemble(l,randint(1,n_files,seed))  ! k:= new posible linker
 ! Debuging random seed:
   !write(6,'(a)')'===================='
   !write(6,*)l,n_files,seed
   !do nn=1,10
   ! write(6,*)( randint(1,n_files,seed) , i=1,10)
   !end do
-!
-  nn=0                                   ! counter MC choose
+  l=randint(1,n_linkers,seed)
+  eee(0)=cost_per_linker(l) + cost_molar()
+  j=genome( l )
+  k=ensemble(l,randint(1,n_files,seed))
   do while (k==j)
-   if(nn>=10)then
-    write(6,'(a,1x,i4,1x,i4,1x,i4)')'# Hard MC Cycle!',k,j,n_files
-    call choose_by_comfort( l )
-    j=genome( l )
-    k=ensemble(l,randint(1,n_files,seed))
-    nn=0
-   else
-    k=ensemble(l,randint(1,n_files,seed))
-    nn=nn+1
-   end if
+   k=ensemble(l,randint(1,n_files,seed))
   end do
+!
+  !nn=0                                   ! counter MC choose
+  !do while (k==j)
+  ! if(nn>=10)then
+  !  write(6,'(a,1x,i4,1x,i4,1x,i4)')'# Hard MC Cycle!',k,j,n_files
+  !  call choose_by_comfort( l )
+  !  j=genome( l )
+  !  k=ensemble(l,randint(1,n_files,seed))
+  !  nn=0
+  ! else
+  !  k=ensemble(l,randint(1,n_files,seed))
+  !  nn=nn+1
+  ! end if
+  !end do
   genome(l) = k                     ! test linker-k
   linkers(j)%virtual=.true.         ! j <- virtual
   linkers(k)%virtual=.false.        ! k <- real
-  ppp = cost()
-  if(ppp>=rrr)then
+  eee(1) = cost_per_linker(l) + cost_molar()
+  if( eee(1) >= eee(0)  )then
    genome(l) = j                    ! rechazo el cambio
    linkers(k)%virtual=.true.        ! k <- virtual
    linkers(j)%virtual=.false.       ! j <- real
   !end if
   else
    ! acepto el cambio e imprimo
-   write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
+   ppp=cost()
+   if(ppp-rrr<0.0) write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
+    mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+   rrr=ppp
   end if
+  call writeCIFFile_from_clusters()
+  deallocate( eee )
  end do mc_exchange_linkers
-! write CIFFile
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
- call writeCIFFile_from_clusters()
 ! finish program
  stop
  contains
+!
+ subroutine regrow_move()
+  integer :: l,ll,j,jj,k,kk,iiii,jjjj,h,hh
+  allocate(eee(0:n_files))
+  call choose_by_comfort( l )
+  ll = randint(1,n_linkers,seed)
+  do while ( ll==l .or. linkers(genome(l))%code == linkers(genome(ll))%code) 
+   ll = randint(1,n_linkers,seed)
+   write(6,*) linkers(genome(l))%code
+   write(6,*) linkers(genome(ll))%code
+  end do
+  j = genome( l  )
+  jj= genome( ll )
+  eee(0)=cost_per_linker(l) + cost_per_linker(ii) + cost_molar()
+  do iiii=1,n_files
+   !
+   k=ensemble(l,iiii)
+   genome(l) = k
+   linkers(j)%virtual=.true.
+   linkers(k)%virtual=.false.
+   !
+   kk=ensemble( ll, iiii )
+   genome( ll) = kk
+   linkers(jj)%virtual = .true.
+   !
+   eee(iiii)= cost_per_linker(l) + cost_per_linker(l) + cost_molar()
+   !
+   write(6,*) iiii
+   write(6,*) linkers(j)%code, linkers(k)%code
+   write(6,*) linkers(jj)%code, linkers(kk)%code
+   write(6,*) eee(iiii)
+   !
+   if( eee(iiii) < eee(0) )then
+    eee(0)=eee(iiii)
+    h=k
+    hh=kk
+   end if
+   genome(l) = j
+   genome(ll) = jj
+   linkers(k)%virtual=.true.
+   linkers(j)%virtual=.false.
+   linkers(kk)%virtual=.true.
+   linkers(jj)%virtual=.false.
+  end do
+  genome(l) = h
+  genome(ll) = hh
+  linkers(j)%virtual=.true.
+  linkers(h)%virtual=.false.
+  linkers(jj)%virtual=.true.
+  linkers(hh)%virtual=.false.
+  ppp=cost() 
+  spam="Regrow move  " 
+  deallocate( eee )
+  return
+ end subroutine regrow_move
+!
+ subroutine exchange_rotation_move( )
+  allocate(eee(0:n_files))
+  eee(0)=cost_per_linker(l) + cost_molar()
+  j=genome( l )
+  h=genome( l )
+  do iiii=1,n_files
+   ! recorro todo el colectivo de ligandos:
+   k=ensemble(l,iiii)
+   !
+   genome(l) = k
+   linkers(j)%virtual=.true.
+   linkers(k)%virtual=.false.
+   ! mido:
+   eee(iiii)= cost_per_linker(l) + cost_molar()
+   !write(6,*)'File:', iiii, 'ligand configuration:',k,'by',j,'energy:',eee(iiii),'ligand:',l,'Total Energy:',cost()
+   if( eee(iiii) < eee(0) )then
+    !write(6,*)'Detecting candidate',k,' [...]'
+    eee(0)=eee(iiii)
+    h=k
+   end if
+   ! 
+   genome(l) = j
+   linkers(k)%virtual=.true.
+   linkers(j)%virtual=.false.
+  end do
+  spam=" "
+  if ( linkers(h)%code(1:3) == linkers(genome(l))%code(1:3) ) then
+   spam="Rotation move"
+  else
+   spam="Exchange move"
+  end if
+  genome(l) = h
+  linkers(j)%virtual=.true.
+  linkers(h)%virtual=.false.
+  !
+  deallocate(eee)
+  ppp=cost()
+  genome(l) = j
+  linkers(k)%virtual=.true.
+  linkers(j)%virtual=.false.
+  return
+ end subroutine exchange_rotation_move
+!
  subroutine update_molar_fraction()
   implicit none
   integer         :: abc
@@ -435,10 +556,9 @@ program zif_generator
  end subroutine update_molar_fraction
  real function cost_molar()
   implicit none
-  real             ::  molar_constant=1
+  real, parameter  ::  molar_constant=1e10
   integer          ::  abc
   call update_molar_fraction()
-  molar_constant=1e17 !real(n_linkers**3)
   cost_molar=0.0
   do abc=1,linker_type_number
    cost_molar=cost_molar+&
@@ -446,8 +566,9 @@ program zif_generator
   end do
   return
  end function  cost_molar
+!
  subroutine update_comfortably()
-  ! Linker well-being allocations in the ensamble:
+  ! Well-being allocated linkers in the ensamble:
   implicit none
   integer :: i
   real    :: base_comfort = 0.0
@@ -458,7 +579,6 @@ program zif_generator
   do i=1,n_linkers
    linkers(genome(i))%comfortably = cost_per_linker(i)
    if( linkers(genome(i))%comfortably /= linkers(genome(i))%comfortably ) then
-   !if( isnan( linkers(genome(i))%comfortably ) ) then
    ! By definition, NAN is not equal to anything, even itself.
     linkers(genome(i))%comfortably=infinity
    end if
@@ -476,6 +596,7 @@ program zif_generator
   !end do
   return
  end subroutine update_comfortably
+!
  subroutine choose_by_molar_fraction(pivot,choosen)
   implicit none
   integer             :: ii,k
@@ -521,12 +642,13 @@ program zif_generator
   ! 11 may 2017
   implicit none
   integer,intent(in) :: identi
-  integer            :: ii,jj,k 
+  integer            :: ii,jj,k ,i
   real               :: r
-  real               :: ell=201300.0
+  real               :: ell=0.5
   real               :: rll=3.9
-  real               :: rml=1.9
-  real               :: eml=500.0
+  real               :: rml=0.0
+  real               :: eml=0.0
+  real               :: infinite = 1.0e34
   cost_per_linker=0.0
   do i=1,n_linkers
    if(i/=identi)then
@@ -552,14 +674,13 @@ program zif_generator
   !  cost_per_linker = cost_per_linker + eml*((rml/r)**12-2*(rml/r)**6)
   ! end do
   !end do
-  if( cost_per_linker > 1.0e12 ) cost_per_linker = 1.0e12
-  if( cost_per_linker /= cost_per_linker ) cost_per_linker= 1.0e12
+  if( cost_per_linker > infinite ) cost_per_linker = infinite
+  if( cost_per_linker /= cost_per_linker ) cost_per_linker= infinite
   return
  end function cost_per_linker
  real function cost_exchange()
   implicit none 
-  integer               :: i,j,ii,jj,k
-  real                  :: r
+  integer               :: i
   cost_exchange=0.0
   do i=1,n_linkers
    !if(linkers(genome(i))%virtual.eqv..true.) then
@@ -589,32 +710,96 @@ program zif_generator
  end function cost_exchange
  real function cost()
   implicit none
+  real :: infinite = 1.0e34
   cost = cost_exchange() + cost_molar()
+  if ( cost > infinite ) cost = infinite
   return
  end function  cost
- subroutine check_atom_type(lll,s)
+!
+ subroutine check_topology_composition(top,mmm,nnn,lll)
+  implicit none
+  character(len=3),intent(in)  :: top
+  integer,intent(in)           :: mmm
+  integer,intent(out)          :: nnn
+  integer,intent(out)          :: lll
+  select case(top)
+   case("LP1")   ! MOF-5 interprenetrate large pore
+    ! Zn4O(BDC)3
+    nnn = int( nnn/4.0 )
+    lll = 3 * nnn
+   case("CP1")   ! MOF-5 interpenetrate  narrow pore
+    ! Zn4O(BDC)3
+    nnn = int( nnn/4.0 )
+    lll = 3 * nnn
+   case default  ! ZIF with IZA code
+    ! ZnN2( XIm )2
+    nnn = mmm
+    lll = 2 * nnn
+  end select 
+ end subroutine check_topology_composition
+!
+ subroutine check_cluster_type(lll,nnn)
+  implicit none
+  character(len=3),intent(in)  :: lll
+  integer         ,intent(out) :: nnn
+  check_cluster: select case (lll)
+   case("oxo")
+    nnn=23
+   case("ZnN")
+    nnn=5
+   case("li1")
+    nnn=32
+   case("li2")
+    nnn=20
+   case("li3")
+    nnn=84
+   case("li4")
+    nnn=58
+   case("li5")
+    nnn=60
+   case("imi","_Im")
+    nnn=8
+   case("mim","mIm")
+    nnn=11
+   case("bim","bIm")
+    nnn=14
+  end select check_cluster
+  return
+ end subroutine check_cluster_type
+!
+ subroutine check_atom_type(lll,s,element)
   implicit none
   real,intent(out)            :: s
   character(len=2),intent(in) :: lll
+  character(len=2),intent(out):: element
   check_atom: select case (lll)
    case('H ',' H','HO','H1','H2','H3')
     rrr=0.320
+    element="H "
    case('C ','C1':'C9',' C')
     s=0.720
+    element="C "
    case('N ',' N','N1':'N9')
     s=0.7
-   case('O ','O1':'O9','OH',' O')
+    element="N "
+   case('O ','O1':'O9','OH',' O','O_')
     s=0.7
+    element="O "
    case('Si')
     s=1.14
+    element="Si"
    case('Al')
     s=1.14
+    element="Al"
    case('Xe')
     s=0.0001
+    element="Xe"
    case('Zn')
     s=1.6
+    element="Zn"
    case('Cl')
     s=1.00
+    element="Cl"
    case default
     write(6,'(a)')"============="
     write(6,*) lll
@@ -645,22 +830,26 @@ program zif_generator
   write(u,'(a,f14.7)')'_cell_angle_gamma              ',cell_0(6)
   
   write(u,'(a)')'loop_'
+  write(u,'(a)')'_atom_site_type_symbol'
   write(u,'(a)')'_atom_site_label'
   write(u,'(a)')'_atom_site_fract_x'
   write(u,'(a)')'_atom_site_fract_y'
   write(u,'(a)')'_atom_site_fract_z'
+  write(u,'(a)')'_atom_site_symmetry_multiplicity'
   do i=1,n_nodes
    if( nodes(i)%virtual.eqv..false.)then
     do j=1,nodes(i)%n_components
-     write(u,*) nodes(i)%component_label(j),(nodes(i)%component_xcrystal(m,j),m=1,3)
+     write(u,'(a2,1x,a2,1x,3(f14.7,1x),i5)')nodes(i)%element(j),nodes(i)%component_label(j),&
+      (nodes(i)%component_xcrystal(m,j),m=1,3),nodes(i)%id
     end do
    end if
   end do
   do i=1,n_linkers
    if( linkers(genome(i))%virtual.eqv..false.)then
     do j=1,linkers(genome(i))%n_components
-     write(u,*) linkers(genome(i))%component_label(j),&
-      (linkers(genome(i))%component_xcrystal(m,j),m=1,3)
+     write(u,'(a2,1x,a2,1x,3(f14.7,1x),i5)')linkers(genome(i))%element(j),&
+       linkers(genome(i))%component_label(j),&
+      (linkers(genome(i))%component_xcrystal(m,j),m=1,3),linkers(genome(i))%id
     end do
    end if
   end do
