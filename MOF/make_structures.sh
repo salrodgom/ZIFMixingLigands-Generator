@@ -1,6 +1,6 @@
 #!/bin/bash
 function look_for_jam {
- n_max_proc=16
+ n_max_proc=24
  n_proc=$(ps aux | grep "generator" | sed "/grep/d" | wc -l | awk '{print $1}')
  while [ $(echo "${n_proc} >= ${n_max_proc}" | bc -lq ) == 1 ] ; do
   sleep 30
@@ -35,7 +35,7 @@ for topology in "I10" "CP2" "LP2" ; do
     look_for_jam
     echo "[send] $folder"
     ln -s ../../generator
-    ln -s ../../zif_${topology}_cif_gin_all
+    ln -s ../../mof_${topology}_cif_gin_all
     nohup ./generator -t $topology -l 1 ${linker_1} 1.0 > ${folder}.txt &
    cd ../..
  done
@@ -53,7 +53,7 @@ for topology in "I10" "CP2" "LP2" ; do
       look_for_jam
       echo "[send] $folder"
       ln -s ../../generator
-      ln -s ../../zif_${topology}_cif_gin_all
+      ln -s ../../mof_${topology}_cif_gin_all
       nohup ./generator -t $topology -l 2 ${linker_1} ${molar_fraction} ${linker_2} $(bc <<<"scale=2;1.0-${molar_fraction}") > ${folder}.txt &
      cd ../..
     done
