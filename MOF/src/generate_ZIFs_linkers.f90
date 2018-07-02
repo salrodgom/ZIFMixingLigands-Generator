@@ -319,7 +319,7 @@ program zif_generator
  allocate(genome(n_linkers))
  genome=0 ! lista de linkers
  nn=0
- write(6,'(a,a,a)') 'Allocating the structure with the smallest lingand type (',linker_type( h ),'):'
+ write(6,'(a,a,a)') 'Allocating the structure with the smallest available lingand type (',linker_type( h ),'):'
  write(6,'(a)') '% Completed        Configuration'
  add_linkers: do 
   if(j==n_linkers) exit add_linkers
@@ -343,35 +343,21 @@ program zif_generator
    write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
    cycle add_linkers
   end if
-! overlap?
-! 16.04.2017
-!  do l=1,j-1 ! scan previous linkers
-!   if(genome(l)==k) then
-!    j=j-1
-!    nn=nn+1
-!    cycle add_linkers ! is it really new?
-!   end if
-!   do ii=1,linkers(genome(l))%n_components    
-!    do jj=1,linkers(k)%n_components
-!     do kk=1,3
-!      atom(kk)=linkers(genome(l))%component_xcrystal(kk,ii)
-!      ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
-!     end do
-!     call make_distances(cell_0,ouratom,atom,rv,rrr)
-!     if( rrr <= r_min_criteria_overlap ) then
-!      j=j-1
-!      nn=nn+1
-!      cycle add_linkers         ! overlap !!!
-!     end if
-!    end do
-!   end do
-!  end do
+  do l=1,j-1 ! scan previous linkers
+   if(genome(l)==k) then
+    j=j-1
+    nn=nn+1
+    cycle add_linkers ! is it really new?
+   end if
+  end do
   write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
   ! great!
   genome(j)=k
   linkers(k)%virtual=.false.
   nn=0
  end do add_linkers
+ write(6,'(a)') "Scanning possible overlaps among atoms of different linkers [...]"
+ if ( overlap() ) write(6,'(a)') "[Warnning] Overlap in initial configuration."
  write(6,'(80a)')('=',l=1,80)
  write(6,'(20(a5,1x))')( linker_type(i),i=1,linker_type_number )
  write(6,'(20(f10.8,1x))') ( linker_type_molar_fraction(i), i=1,linker_type_number )
@@ -385,37 +371,13 @@ program zif_generator
  rrr=0.0
  mc_exchange_linkers: do mc_steps=1,n_linkers*n_linkers 
   allocate(eee(0:1))
-  !rrr = cost()
-  !call choose_by_comfort( l )            ! l:= position of linker in genome
-  !j=genome( l )                          ! j:= old linker 
-  !k=ensemble(l,randint(1,n_files,seed))  ! k:= new posible linker
-! Debuging random seed:
-  !write(6,'(a)')'===================='
-  !write(6,*)l,n_files,seed
-  !do nn=1,10
-  ! write(6,*)( randint(1,n_files,seed) , i=1,10)
-  !end do
-  l=randint(1,n_linkers,seed)
+  l=randint(1,n_linkers,seed)               ! l:= position of linker in genome
   eee(0)=cost_per_linker(l) + cost_molar()
-  j=genome( l )
-  k=ensemble(l,randint(1,n_files,seed))
+  j=genome( l )                             ! j:= old linker
+  k=ensemble(l,randint(1,n_files,seed))     ! k:= new posible linker
   do while (k==j)
    k=ensemble(l,randint(1,n_files,seed))
   end do
-!
-  !nn=0                                   ! counter MC choose
-  !do while (k==j)
-  ! if(nn>=10)then
-  !  write(6,'(a,1x,i4,1x,i4,1x,i4)')'# Hard MC Cycle!',k,j,n_files
-  !  call choose_by_comfort( l )
-  !  j=genome( l )
-  !  k=ensemble(l,randint(1,n_files,seed))
-  !  nn=0
-  ! else
-  !  k=ensemble(l,randint(1,n_files,seed))
-  !  nn=nn+1
-  ! end if
-  !end do
   genome(l) = k                     ! test linker-k
   linkers(j)%virtual=.true.         ! j <- virtual
   linkers(k)%virtual=.false.        ! k <- real
@@ -427,9 +389,9 @@ program zif_generator
   !end if
   else
    ! acepto el cambio e imprimo
-   ppp=cost()
+   ppp=cost()/real_n_atoms()
    if(ppp-rrr<0.0) write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
-    mc_steps,ppp,ppp-rrr,cost_molar(),&
+    mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
    rrr=ppp
   end if
@@ -438,8 +400,34 @@ program zif_generator
  end do mc_exchange_linkers
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
 ! finish program
+ if ( overlap() ) write(6,'(a)') "[Warnning] Overlap in last configuration."
  stop
  contains
+!
+ logical function overlap()
+  implicit none
+  integer :: i,j,ii,jj,kk
+  real    :: rrr
+  overlap = .false.
+  scan_overlap: do i=1,n_linkers
+   do j=i+1,n_linkers
+    do ii=1,linkers(genome(i))%n_components
+     do jj=1,linkers(genome(j))%n_components
+      do kk=1,3
+       atom(kk)=linkers(genome(i))%component_xcrystal(kk,ii)
+       ouratom(kk)=linkers(genome(j))%component_xcrystal(kk,jj)
+      end do
+      call make_distances(cell_0,ouratom,atom,rv,rrr)
+      if( rrr <= r_min_criteria_overlap ) then
+       overlap=.true.
+       exit scan_overlap
+      end if
+     end do
+    end do
+   end do
+  end do scan_overlap
+  return
+ end function overlap
 !
  subroutine regrow_move()
   integer :: l,ll,j,jj,k,kk,iiii,jjjj,h,hh
@@ -566,6 +554,16 @@ program zif_generator
   end do
   return
  end function  cost_molar
+!
+ integer function real_n_atoms()
+  implicit none
+  integer              :: i
+  real_n_atoms = 0
+  do i=1,n_linkers
+   real_n_atoms = real_n_atoms + linkers(genome(i))%n_components
+  end do
+  return
+ end function real_n_atoms
 !
  subroutine update_comfortably()
   ! Well-being allocated linkers in the ensamble:
@@ -723,11 +721,15 @@ program zif_generator
   integer,intent(out)          :: nnn
   integer,intent(out)          :: lll
   select case(top)
-   case("LP1")   ! MOF-5 interprenetrate large pore
+   case("LP1","LP2")   ! IRMOF-10 interprenetrate large pore
     ! Zn4O(BDC)3
     nnn = int( nnn/4.0 )
     lll = 3 * nnn
-   case("CP1")   ! MOF-5 interpenetrate  narrow pore
+   case("CP1","CP2")   ! IRMOF-10 interpenetrate  narrow pore
+    ! Zn4O(BDC)3
+    nnn = int( nnn/4.0 )
+    lll = 3 * nnn
+   case("I10")   ! IRMOF-10 non-interpenetrate cubic form
     ! Zn4O(BDC)3
     nnn = int( nnn/4.0 )
     lll = 3 * nnn
@@ -757,6 +759,20 @@ program zif_generator
     nnn=58
    case("li5")
     nnn=60
+   case("li6")
+    nnn=72
+   case("li7")
+    nnn=84
+   case("li8")
+    nnn=31
+   case("li9")
+    nnn=31
+   case("l10")
+    nnn=42
+   case("l11")
+    nnn=42
+   case("l12")
+    nnn=40
    case("imi","_Im")
     nnn=8
    case("mim","mIm")
