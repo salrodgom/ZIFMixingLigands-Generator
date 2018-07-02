@@ -86,11 +86,11 @@ program zif_generator
  integer             :: num_args
  real,parameter      :: r_min_criteria_connectivity=0.56
  real,parameter      :: r_min_criteria_overlap = 1.0
- integer,parameter   :: max_number_tries=1000
+ integer,parameter   :: max_number_tries=10000
  integer             :: n_atoms = 0,n_nodes=0,n_linkers
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps,mc_max_steps=1000
+ integer             :: mc_steps,mc_max_steps=2000
  integer             :: solera,solera_max=10
  character(len=3)    :: topology = "AFI"
  character(len=20)   :: spam
@@ -100,6 +100,8 @@ program zif_generator
  character(len=100)  :: line,string
  character(len=100), dimension(:), allocatable :: args
  character(len=3),dimension(:),allocatable     :: linker_type
+ !real            ,dimension(:,:),allocatable   :: matrix_distance
+ logical,         dimension(:,:),allocatable   :: computing_flag
  integer                                       :: linker_type_number = 1
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
  integer,dimension(:),allocatable              :: genome
@@ -112,6 +114,9 @@ program zif_generator
   integer                   :: id
   real                      :: component_xcrystal(1:3,1:100)
   real                      :: component_size(100)
+  real                      :: x
+  real                      :: y
+  real                      :: z
   character(len=2)          :: component_label(100)
   real                      :: comfortably
   logical                   :: virtual
@@ -284,23 +289,48 @@ program zif_generator
    linkers(h)%population=molar_fraction
    linkers(h)%n_components=int((n_atoms-n_nodes)/n_linkers)
    linkers(h)%virtual=.true.
+   linkers(h)%x=0.0
+   linkers(h)%y=0.0
+   linkers(h)%z=0.0
    ensemble(j,i)=linkers(h)%id     ! registro de linker en file
    do k=1,int((n_atoms-n_nodes)/n_linkers)
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
     call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k))
    end do
+   linkers(h)%x=sum(linkers(h)%component_xcrystal(1,1:int((n_atoms-n_nodes)/n_linkers)))/real((n_atoms-n_nodes)/n_linkers)
+   linkers(h)%y=sum(linkers(h)%component_xcrystal(2,1:int((n_atoms-n_nodes)/n_linkers)))/real((n_atoms-n_nodes)/n_linkers)
+   linkers(h)%z=sum(linkers(h)%component_xcrystal(3,1:int((n_atoms-n_nodes)/n_linkers)))/real((n_atoms-n_nodes)/n_linkers)
   end do
   close(100)
  end do
  close(111)
+ allocate( computing_flag(n_linkers,n_linkers) )
+ allocate(genome(n_linkers))
+ computing_flag=.false.
+ do i=1,n_linkers
+  do j=i+1,n_linkers
+   atom(1)=linkers(i)%x
+   atom(2)=linkers(i)%y
+   atom(3)=linkers(i)%z
+   ouratom(1)=linkers(j)%x
+   ouratom(2)=linkers(j)%y
+   ouratom(3)=linkers(j)%z
+   call make_distances(cell_0,ouratom,atom,rv,rrr)
+   if( rrr <= 12.0 ) then
+    computing_flag(i,j)=.true.
+    computing_flag(j,i)=.true.
+   end if
+  end do
+ end do
  call system('rm list tmp')
  j=0
- allocate(genome(n_linkers))
  genome=0 ! lista de linkers
  nn=0
+ qqq = r_min_criteria_overlap
  add_linkers: do 
   if(j==n_linkers) exit add_linkers
+  if (qqq<=0.5) STOP "Overlap Criteria Too Small, Relocation is not possible."
   j=j+1
   if(nn>=max_number_tries) then
    j=0       ! if the number of tries is bigger than a limit, 
@@ -308,6 +338,7 @@ program zif_generator
    nn=0
    linkers%virtual=.true. ! all the linkers are virtuals again!
    write(6,'(a)')'[warning] Relocation this ligands is hard, check the input'
+   qqq = qqq - 0.01
    cycle add_linkers
   end if
   !else if (nn>=10) then
@@ -337,7 +368,7 @@ program zif_generator
       ouratom(kk)=linkers(k)%component_xcrystal(kk,jj)
      end do
      call make_distances(cell_0,ouratom,atom,rv,rrr)
-     if( rrr <= r_min_criteria_overlap ) then
+     if( rrr <= qqq ) then
       j=j-1
       nn=nn+1
       cycle add_linkers         ! overlap !!!
@@ -357,6 +388,7 @@ program zif_generator
  write(6,'((1000(i6,1x)))') ( genome(i),i=1,n_linkers )
  write(6,'(80a)')('=',l=1,80)
  mc_steps=0
+ call writeCIFFile_from_clusters()
  mc_exchange_linkers: do mc_steps=1,mc_max_steps !while !(mc_steps<=mc_max_steps.or.solera<=solera_max)
   rrr = cost()
   call choose_by_comfort( l )            ! l:= position of linker in genome
@@ -392,6 +424,7 @@ program zif_generator
                                     ! acepto el cambio e imprimo
    write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')mc_steps,ppp,ppp-rrr,cost_molar(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+   call writeCIFFile_from_clusters()
   end if
  end do mc_exchange_linkers
  
@@ -510,6 +543,7 @@ program zif_generator
   real               :: eml=500.0
   cost_per_linker=0.0
   do i=1,n_linkers
+   if(computing_flag(i,identi))then
    if(i/=identi)then
     do ii=1,linkers(genome(i))%n_components
      do jj=1,linkers(genome(identi))%n_components
@@ -521,6 +555,7 @@ program zif_generator
       cost_per_linker = cost_per_linker + ell*((rll/r)**12-2*(rll/r)**6)
      end do
     end do
+   end if
    end if
   end do
   !do i=1,n_nodes
