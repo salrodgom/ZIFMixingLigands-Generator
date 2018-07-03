@@ -81,7 +81,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps, mc_max_steps=1000
+ integer             :: mc_steps, mc_max_steps=0
  character(len=3)    :: topology = "Xxx"
  character(len=20)   :: spam
  character(len=100)  :: CIFFilename=" "
@@ -114,6 +114,7 @@ program zif_generator
  type(cluster),allocatable  :: nodes(:)
  call init_random_seed(seed)
  num_args = command_argument_count()
+ mc_max_steps=100*n_linkers*n_linkers
  allocate(args(num_args))
  do i = 1, num_args
   call get_command_argument(i,args(i))
@@ -369,7 +370,7 @@ program zif_generator
  call writeCIFFile_from_clusters()
  !stop
  rrr=0.0
- mc_exchange_linkers: do mc_steps=1,5*n_linkers*n_linkers 
+ mc_exchange_linkers: do mc_steps=1,mc_max_steps
   allocate(eee(0:1))
   l=randint(1,n_linkers,seed)               ! l:= position of linker in genome
   eee(0)=cost_per_linker(l) + cost_molar()
@@ -390,9 +391,11 @@ program zif_generator
   else
    ! acepto el cambio e imprimo
    ppp=cost()/real_n_atoms()
-   if(ppp-rrr<0.0) write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
+   if(ppp-rrr<0.0.or.mc_steps==mc_max_steps) then
+    write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+   end if
    rrr=ppp
   end if
   call writeCIFFile_from_clusters()
@@ -401,7 +404,7 @@ program zif_generator
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
 ! finish program
  if ( overlap() ) write(6,'(a)') "[Warnning] Overlap in last configuration."
- stop
+ stop "Finish program"
  contains
 !
  logical function overlap()
