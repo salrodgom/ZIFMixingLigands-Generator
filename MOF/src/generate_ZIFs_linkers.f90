@@ -81,7 +81,7 @@ program zif_generator
  integer             :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
  real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer             :: n_files=1
- integer             :: mc_steps, mc_max_steps=500
+ integer             :: mc_steps, mc_max_steps=1000
  character(len=3)    :: topology = "Xxx"
  character(len=20)   :: spam
  character(len=100)  :: CIFFilename=" "
@@ -369,7 +369,7 @@ program zif_generator
  call writeCIFFile_from_clusters()
  !stop
  rrr=0.0
- mc_exchange_linkers: do mc_steps=1,n_linkers*n_linkers 
+ mc_exchange_linkers: do mc_steps=1,5*n_linkers*n_linkers 
   allocate(eee(0:1))
   l=randint(1,n_linkers,seed)               ! l:= position of linker in genome
   eee(0)=cost_per_linker(l) + cost_molar()
