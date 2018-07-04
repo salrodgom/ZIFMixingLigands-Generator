@@ -69,25 +69,25 @@ program zif_generator
  use mod_random
 ! use topology_agents,only generate
  implicit none
- integer             :: i,j,k,l,h,z,m,ierr,nn,seed,iiii
- integer             :: linker_type_max=10
- integer             :: ii,jj,kk
- real                :: rrr,ppp,qqq
- real                :: atom(3),ouratom(3)
- integer             :: num_args
- real,parameter      :: r_min_criteria_connectivity=0.56
- real,parameter      :: r_min_criteria_overlap = 1.0
- integer,parameter   :: max_number_tries=1000
- integer             :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
- real                :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
- integer             :: n_files=1
- integer             :: mc_steps, mc_max_steps=0
- character(len=3)    :: topology = "Xxx"
- character(len=20)   :: spam
- character(len=100)  :: CIFFilename=" "
- character(len=100)  :: filename=" "
- character(len=80)   :: string_stop_head= "_atom_site_occupancy"
- character(len=100)  :: line, string
+ integer                                       :: i,j,k,l,h,z,m,ierr,nn,seed,iiii
+ integer                                       :: linker_type_max=10
+ integer                                       :: ii,jj,kk
+ real                                          :: rrr,ppp,qqq
+ real                                          :: atom(3),ouratom(3)
+ integer                                       :: num_args
+ real,parameter                                :: r_min_criteria_connectivity=0.56
+ real,parameter                                :: r_min_criteria_overlap = 1.0
+ integer,parameter                             :: max_number_tries=1000
+ integer                                       :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
+ real                                          :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
+ integer                                       :: n_files=1
+ integer                                       :: mc_steps, mc_max_steps=0
+ character(len=3)                              :: topology = "Xxx"
+ character(len=20)                             :: spam
+ character(len=100)                            :: CIFFilename=" "
+ character(len=100)                            :: filename=" "
+ character(len=80)                             :: string_stop_head= "_atom_site_occupancy"
+ character(len=100)                            :: line, string
  character(len=100), dimension(:), allocatable :: args
  character(len=3),dimension(:),allocatable     :: linker_type
  integer                                       :: linker_type_number = 1
@@ -95,26 +95,24 @@ program zif_generator
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
  integer,dimension(:),allocatable              :: genome
  integer,dimension(:),allocatable              :: histogram_molar_fraction
- character(len=3) :: code
- real             :: molar_fraction
- type                       :: cluster
-  character(len=3)          :: code
-  integer                   :: n_components
-  integer                   :: id
-  real                      :: component_xcrystal(1:3,1:500)
-  real                      :: component_size(500)
-  character(len=2)          :: component_label(500)
-  character(len=2)          :: element(500)
-  real                      :: comfortably
-  logical                   :: virtual
-  real                      :: population
- end type
- type(cluster),allocatable  :: linkers(:) 
- integer,allocatable        :: ensemble(:,:)
- type(cluster),allocatable  :: nodes(:)
+ character(len=3)                              :: code
+ real                                          :: molar_fraction
+ type                                          :: cluster
+  character(len=3)                            :: code
+  integer                                     :: n_components
+  integer                                     :: id
+  real                                        :: component_xcrystal(1:3,1:500)
+  real                                        :: component_size(500)
+  character(len=2)                            :: component_label(500)
+  character(len=2)                            :: element(500)
+  real                                        :: comfortably
+  logical                                     :: virtual
+  real                                        :: population
+ end type                                      
+ type(cluster),allocatable                     :: nodes(:), linkers(:)
+ integer,allocatable                           :: ensemble(:,:)
  call init_random_seed(seed)
  num_args = command_argument_count()
- mc_max_steps=100*n_linkers*n_linkers
  allocate(args(num_args))
  do i = 1, num_args
   call get_command_argument(i,args(i))
@@ -200,6 +198,7 @@ program zif_generator
  allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
  allocate(ensemble(n_linkers,n_files))
+ mc_max_steps=100*n_linkers*n_linkers
  write(6,'(80a)')('=',j=1,80)
  write(6,*)n_nodes, 'nodes/uc'
  write(6,*)n_linkers,'linkers/uc'
@@ -389,7 +388,6 @@ program zif_generator
    linkers(j)%virtual=.false.       ! j <- real
   !end if
   else
-   ! acepto el cambio e imprimo
    ppp=cost()/real_n_atoms()
    if(ppp-rrr<0.0.or.mc_steps==mc_max_steps) then
     write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&

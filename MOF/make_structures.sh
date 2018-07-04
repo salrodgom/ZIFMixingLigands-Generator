@@ -24,10 +24,10 @@ ligands[11]="l11"
 ligands[12]="l12"
 # main code:
 make
-for topology in "CP2" "LP2" ; do
+for topology in "I10" "CP2" "LP2" ; do
  macro_folder=Pure
  if [ ! -d $macro_folder ] ; then mkdir $macro_folder ; fi
- for (( i=5; i<=6; i++ )) ; do
+ for (( i=1; i<=12; i++ )) ; do
    linker_1=${ligands[${i}]}
    folder=${topology}_${linker_1}_pure
    if [ ! -d $macro_folder/$folder ] ; then mkdir $macro_folder/$folder ; fi
@@ -41,7 +41,7 @@ for topology in "CP2" "LP2" ; do
  done
  macro_folder=Binary
  if [ ! -d $macro_folder ] ; then mkdir $macro_folder ; fi
- for (( i=5; i<=6; i++ )) ; do
+ for (( i=1; i<=12; i++ )) ; do
   linker_1=${ligands[${i}]}
    j=2
    linker_2=${ligands[${j}]}
