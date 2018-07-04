@@ -82,6 +82,7 @@ program zif_generator
  real                                          :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer                                       :: n_files=1
  integer                                       :: mc_steps, mc_max_steps=0
+  logical                                       :: flag = .true.
  character(len=3)                              :: topology = "Xxx", nodes_code = "Xxx"
  character(len=20)                             :: spam
  character(len=100)                            :: CIFFilename=" "
@@ -323,6 +324,7 @@ program zif_generator
  nn=0
  write(6,'(a,a,a)') 'Allocating the structure with the smallest available lingand type (',linker_type( h ),'):'
  write(6,'(a)') '% Completed        Configuration'
+ linkers%virtual = .true.
  add_linkers: do 
   if(j==n_linkers) exit add_linkers
   j=j+1
@@ -334,29 +336,33 @@ program zif_generator
    write(6,'(a)')'[warning] Relocation this ligands is hard, check the input'
    cycle add_linkers
   end if
-  k=ensemble(j,randint(1,n_files,seed))
-  do while ( linkers(k)%code /= linker_type( h ) )
+  flag = .true.
+  do while ( flag )
    k=ensemble(j,randint(1,n_files,seed))
+   flag = .false.
+   if ( linkers(k)%code /= linker_type( h ) ) flag = .true.
+   if ( linkers(k)%virtual .eqv. .false. )    flag = .true.
+   !write( 6,*)  linkers(k)%code, linker_type( h ), linkers(k)%virtual, flag
   end do
   if(j==1)then
    genome(1)=k
    linkers(k)%virtual=.false.
    nn=nn+1
-   write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
+   write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code, linkers(k)%virtual
    cycle add_linkers
   end if
-  do l=1,j-1 ! scan previous linkers
-   if(genome(l)==k) then
-    j=j-1
-    nn=nn+1
-    cycle add_linkers ! is it really new?
-   end if
-  end do
-  write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code
+  !do l=1,j-1 ! scan previous linkers
+  ! if(genome(l)==k) then
+  !  j=j-1
+  !  nn=nn+1
+  !  cycle add_linkers ! is it really new?
+  ! end if
+  !end do
   ! great!
   genome(j)=k
   linkers(k)%virtual=.false.
-  nn=0
+  write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code, linkers(k)%virtual
+  nn= 0
  end do add_linkers
  write(6,'(a)') "Scanning possible overlaps among atoms of different linkers [...]"
  if ( overlap() ) write(6,'(a)') "[Warnning] Overlap in initial configuration."
