@@ -198,7 +198,7 @@ program zif_generator
  allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
  allocate(ensemble(n_linkers,n_files))
- mc_max_steps=100*n_linkers
+ mc_max_steps=1000*n_linkers
  write(6,'(80a)')('=',j=1,80)
  write(6,*)topology
  write(6,*)n_metals, 'metals/uc'
