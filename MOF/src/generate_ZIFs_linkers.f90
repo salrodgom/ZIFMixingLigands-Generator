@@ -82,7 +82,7 @@ program zif_generator
  real                                          :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
  integer                                       :: n_files=1
  integer                                       :: mc_steps, mc_max_steps=0
- character(len=3)                              :: topology = "Xxx"
+ character(len=3)                              :: topology = "Xxx", nodes_code = "Xxx"
  character(len=20)                             :: spam
  character(len=100)                            :: CIFFilename=" "
  character(len=100)                            :: filename=" "
@@ -157,7 +157,7 @@ program zif_generator
  do j=1,linker_type_number
   i=len(trim(linker_type(j)))
   k=LEN(TRIM(topology))
-  string="ls mof_"//topology(1:k)//"_cif_gin_all/mof_int_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
+  string="ls ???_"//topology(1:k)//"_cif_gin_all/???_???_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
   call system(string)
   write(6,'(a)')string
   write(line,*) linker_type_molar_fraction(j)
@@ -185,21 +185,23 @@ program zif_generator
    do 
     read(121,'(a)',iostat=ierr) line
     if(ierr/=0)exit
-    if(line(1:2)=='Zn') n_nodes=n_nodes+1
+    if(line(1:2)=='Zn'.or.line(3:4)=='Zn')then
+     write(6,*) "Detecting Zn cluster"
+     n_metals=n_metals+1
+    end if
    end do
    close(121)
-   call check_topology_composition(topology,n_metals,n_nodes,n_linkers)
-   !n_nodes=int(real(n_nodes)/4.0)
-   !--------------
-   !n_linkers=n_nodes*2
+   call check_topology_composition(topology,n_metals,n_nodes,n_linkers,nodes_code)
   end if
  end do
  rewind(111)
  allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
  allocate(ensemble(n_linkers,n_files))
- mc_max_steps=100*n_linkers*n_linkers
+ mc_max_steps=100*n_linkers
  write(6,'(80a)')('=',j=1,80)
+ write(6,*)topology
+ write(6,*)n_metals, 'metals/uc'
  write(6,*)n_nodes, 'nodes/uc'
  write(6,*)n_linkers,'linkers/uc'
  write(6,*)n_files, 'files detected'
@@ -267,7 +269,7 @@ program zif_generator
   do j=1,n_nodes
    z=z+1
    nodes(z)%id=z 
-   nodes(z)%code='oxo'
+   nodes(z)%code = nodes_code
    nodes(z)%population=1.0
    call check_cluster_type( nodes(z)%code , nodes(z)%n_components )
    nodes(z)%virtual=.false.
@@ -369,6 +371,7 @@ program zif_generator
  call writeCIFFile_from_clusters()
  !stop
  rrr=0.0
+ write(6,'(a,1x,i5)') "Performing MC, max number of steps:", mc_max_steps
  mc_exchange_linkers: do mc_steps=1,mc_max_steps
   allocate(eee(0:1))
   l=randint(1,n_linkers,seed)               ! l:= position of linker in genome
@@ -389,7 +392,7 @@ program zif_generator
   !end if
   else
    ppp=cost()/real_n_atoms()
-   if(ppp-rrr<0.0.or.mc_steps==mc_max_steps) then
+   if(ppp-rrr<0.0) then
     write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
@@ -399,6 +402,9 @@ program zif_generator
   call writeCIFFile_from_clusters()
   deallocate( eee )
  end do mc_exchange_linkers
+ write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
+  mc_max_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
+  'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
  write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
 ! finish program
  if ( overlap() ) write(6,'(a)') "[Warnning] Overlap in last configuration."
@@ -715,27 +721,33 @@ program zif_generator
   return
  end function  cost
 !
- subroutine check_topology_composition(top,mmm,nnn,lll)
+ subroutine check_topology_composition(top,mmm,nnn,lll,node_code)
   implicit none
   character(len=3),intent(in)  :: top
   integer,intent(in)           :: mmm
   integer,intent(out)          :: nnn
   integer,intent(out)          :: lll
+  character(len=3),intent(out) :: node_code
   select case(top)
    case("LP1","LP2")   ! IRMOF-10 interprenetrate large pore
     ! Zn4O(BDC)3
+    node_code="oxo"
     nnn = int( nnn/4.0 )
     lll = 3 * nnn
    case("CP1","CP2")   ! IRMOF-10 interpenetrate  narrow pore
     ! Zn4O(BDC)3
+    node_code="oxo"
     nnn = int( nnn/4.0 )
     lll = 3 * nnn
    case("I10")   ! IRMOF-10 non-interpenetrate cubic form
     ! Zn4O(BDC)3
+    node_code="oxo"
     nnn = int( nnn/4.0 )
     lll = 3 * nnn
    case default  ! ZIF with IZA code
+    node_code="Zn_"
     ! ZnN2( XIm )2
+    write(6,'(a)') "detecting Zeolitic Imidazolate Framework" 
     nnn = mmm
     lll = 2 * nnn
   end select 
@@ -748,8 +760,8 @@ program zif_generator
   check_cluster: select case (lll)
    case("oxo")
     nnn=23
-   case("ZnN")
-    nnn=5
+   case("Zn_")
+    nnn=1
    case("li1")
     nnn=32
    case("li2")
@@ -774,13 +786,19 @@ program zif_generator
     nnn=42
    case("l12")
     nnn=40
-   case("imi","_Im")
+   case("imi")
     nnn=8
-   case("mim","mIm")
+    write(6,'(a)') "detecting imidazol"
+   case("mim")
     nnn=11
-   case("bim","bIm")
+   case("bim")
     nnn=14
+   case default
+    nnn=0
+    write(6,'(a)') "Linker type does not found"
+    stop "[Error] Composition"
   end select check_cluster
+  write(6,'(i3,1x,a)') nnn, "atoms per linker"
   return
  end subroutine check_cluster_type
 !
