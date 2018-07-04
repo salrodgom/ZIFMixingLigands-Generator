@@ -1,1 +1,0 @@
- for f in *2ni_*.cif; do mv "$f" $(echo $f | sed 's/2ni_/_2ni_/g') ;  done
