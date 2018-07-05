@@ -32,7 +32,7 @@ make
 for topology in "SOD" "SZ7" ; do
  macro_folder=Pure
  if [ ! -d $macro_folder ] ; then mkdir $macro_folder ; fi
- for (( i=1; i<=12; i++ )) ; do
+ for (( i=1; i<=3; i++ )) ; do
    linker_1=${ligands[${i}]}
    folder=${topology}_${linker_1}_pure
    if [ ! -d $macro_folder/$folder ] ; then mkdir $macro_folder/$folder ; fi
@@ -40,7 +40,7 @@ for topology in "SOD" "SZ7" ; do
     look_for_jam
     echo "[send] $folder"
     ln -s ../../generator
-    ln -s ../../mof_${topology}_cif_gin_all
+    ln -s ../../tbp_database
     nohup ./generator -t $topology -l 1 ${linker_1} 1.0 > ${folder}.txt &
    cd ../..
  done
@@ -48,7 +48,7 @@ for topology in "SOD" "SZ7" ; do
  if [ ! -d $macro_folder ] ; then mkdir $macro_folder ; fi
  for (( i=1; i<=3; i++ )) ; do
   linker_1=${ligands[${i}]}
-   for (( j=i+1; i<=3; i++ )) ; do
+  for (( j=i+1; i<=3; i++ )) ; do
    linker_2=${ligands[${j}]}
    if [ "$linker_1" != "$linker_2" ] ; then 
     for molar_fraction in $(seq 0.10 0.10 0.90 ) ; do
@@ -58,11 +58,12 @@ for topology in "SOD" "SZ7" ; do
       look_for_jam
       echo "[send] $folder"
       ln -s ../../generator
-      ln -s ../../mof_${topology}_cif_gin_all
+      ln -s ../../tbp_database
       nohup ./generator -t $topology -l 2 ${linker_1} ${molar_fraction} ${linker_2} $(bc <<<"scale=2;1.0-${molar_fraction}") > ${folder}.txt &
      cd ../..
     done
    fi
+  done
  done
  macro_folder=Ternary
  if [ ! -d $macro_folder ] ; then mkdir $macro_folder ; fi
@@ -82,10 +83,11 @@ for topology in "SOD" "SZ7" ; do
      look_for_jam
      echo "[send] $folder"
      ln -s ../../generator
-     ln -s ../../zif_${topology}_cif_gin_all
+     ln -s ../../tbp_database
      nohup ./generator -t $topology -l 3 ${link_1} $iu ${link_2} $ju ${link_3} $ku > ${folder}.txt &
     cd ../..
    done
   done
  done
 done
+exit 0

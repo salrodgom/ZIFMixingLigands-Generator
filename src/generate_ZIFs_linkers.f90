@@ -85,6 +85,7 @@ program zif_generator
   logical                                       :: flag = .true.
  character(len=3)                              :: topology = "Xxx", nodes_code = "Xxx"
  character(len=20)                             :: spam
+ character(len=100)                            :: FolderDataBase = " "
  character(len=100)                            :: CIFFilename=" "
  character(len=100)                            :: filename=" "
  character(len=80)                             :: string_stop_head= "_atom_site_occupancy"
@@ -158,7 +159,7 @@ program zif_generator
  do j=1,linker_type_number
   i=len(trim(linker_type(j)))
   k=LEN(TRIM(topology))
-  string="ls ???_"//topology(1:k)//"_cif_gin_all/???_???_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
+  string="ls tbp_database/???_"//topology(1:k)//"_cif_gin_all/???_???_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
   call system(string)
   write(6,'(a)')string
   write(line,*) linker_type_molar_fraction(j)
@@ -173,10 +174,12 @@ program zif_generator
  do
   read(111,'(a)',iostat=ierr) line 
   if(ierr/=0) exit
-  read(line(1:41),'(a)') CIFFilename
+  read(line(1 :12),'(a)') FolderDataBase
+  read(line( 1:54),'(a)') CIFFilename
+  read(line(55:),*)       code,molar_fraction
+  FolderDataBase=adjustl(trim( FolderDataBase ))
   CIFFilename=adjustl(trim(CIFFilename))
-  write(6,'(a,1x,a1)')CIFFilename,'#'
-  read(line(42:),*) code,molar_fraction
+  write(6,'(a,1x,a1)') CIFFilename,'#'
   write(6,'(a,1x,a3,1x,f14.7)')trim(CIFFilename),trim(code),molar_fraction
   n_files=n_files+1
   if(n_files==1)then
@@ -218,8 +221,9 @@ program zif_generator
  write(6,'(80a)')('=',j=1,80)
  do i=1,n_files
   read(111,'(a)',iostat=ierr) line
-  read(line(1:41),'(a)') CIFFilename
-  read(line(42:) ,*) code,molar_fraction
+  read(line(1 :12),'(a)') FolderDataBase
+  read(line( 1:54),'(a)') CIFFilename
+  read(line(55:),*)       code,molar_fraction
   write(6,'(a1,1x,a)')'#',trim(CIFfilename)
   open(100,file=trim(CIFfilename),status='old',iostat=ierr)
   if(ierr/=0)stop 'File does not found'
