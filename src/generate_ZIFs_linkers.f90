@@ -4,72 +4,79 @@ module mod_random
  private
  public init_random_seed, randint, r4_uniform
  contains
- subroutine init_random_seed(seed)
+ subroutine init_random_seed( )
+  use iso_fortran_env, only: int64
   implicit none
-  integer, intent(out) :: seed
-! local
-  integer   day,hour,i4_huge,milli,minute,month,second,year
-  parameter (i4_huge=2147483647)
-  double precision temp
-  character*(10) time
-  character*(8) date
-  call date_and_time (date,time)
-  read (date,'(i4,i2,i2)')year,month,day
-  read (time,'(i2,i2,i2,1x,i3)')hour,minute,second,milli
-  temp=0.0D+00
-  temp=temp+dble(month-1)/11.0D+00
-  temp=temp+dble(day-1)/30.0D+00
-  temp=temp+dble(hour)/23.0D+00
-  temp=temp+dble(minute)/59.0D+00
-  temp=temp+dble(second)/59.0D+00
-  temp=temp+dble(milli)/999.0D+00
-  temp=temp/6.0D+00
-  doext: do
-    if(temp<=0.0D+00 )then
-       temp=temp+1.0D+00
-       cycle doext
+  integer, allocatable :: seed(:)
+  integer              :: i, n, un, istat, dt(8), pid
+  integer(int64)       :: t
+  call random_seed(size = n)
+  allocate(seed(n))
+  ! First try if the OS provides a random number generator
+  open(newunit=un, file="/dev/urandom", access="stream", &
+       form="unformatted", action="read", status="old", iostat=istat)
+  if (istat == 0) then
+     read(un) seed
+     close(un)
+  else
+     ! Fallback to XOR:ing the current time and pid. The PID is
+     ! useful in case one launches multiple instances of the same
+     ! program in parallel.
+     call system_clock(t)
+     if (t == 0) then
+        call date_and_time(values=dt)
+        t = (dt(1) - 1970) * 365_int64 * 24 * 60 * 60 * 1000 &
+             + dt(2) * 31_int64 * 24 * 60 * 60 * 1000 &
+             + dt(3) * 24_int64 * 60 * 60 * 1000 &
+             + dt(5) * 60 * 60 * 1000 &
+             + dt(6) * 60 * 1000 + dt(7) * 1000 &
+             + dt(8)
+     end if
+     pid = getpid()
+     t = ieor(t, int(pid, kind(t)))
+     do i = 1, n
+        seed(i) = lcg(t)
+     end do
+  end if
+  call random_seed(put=seed)
+  write(6,*)seed
+ contains
+  ! This simple PRNG might not be good enough for real work, but is
+  ! sufficient for seeding a better PRNG.
+  function lcg(s)
+    integer :: lcg
+    integer(int64) :: s
+    if (s == 0) then
+       s = 104729
     else
-       exit doext
+       s = mod(s, 4294967296_int64)
     end if
-  enddo doext
-  doext2: do
-    if (1.0D+00<temp) then
-       temp=temp-1.0D+00
-       cycle doext2
-    else
-       exit doext2
-    end if
-  end do doext2
-  seed=int(dble(i4_huge)*temp)
-  if(seed == 0)       seed = 1
-  if(seed == i4_huge) seed = seed-1
-  return
+    s = mod(s * 279470273_int64, 4294967291_int64)
+    lcg = int(mod(s, int(huge(0), int64)), kind(0))
+  end function lcg
  end subroutine init_random_seed
-!
- integer function randint(i,j,seed)
-  integer,intent(in) :: i,j,seed
-  real               :: r
-  CALL RANDOM_NUMBER(r)
-  randint=int(r*(j+1-i))+i
+ integer function randint(i,j)
+  integer,intent(in)    :: i,j
+  real                  :: r
+  call random_number(r)
+  randint = i + floor((j+1-i)*r)
  end function randint
 ! 
- real function r4_uniform(x,y,seed)
+ real function r4_uniform(x,y)
   implicit none
-  real,intent(in)    :: x,y 
-  real               :: r
-  integer,intent(in) :: seed
-  CALL RANDOM_NUMBER(r)
+  real,intent(in)       :: x,y
+  real                  :: r
+  call random_number(r)
   r4_uniform=(r*(y-x))+x
   return
  end function r4_uniform
-end module
+end module mod_random
 
-program zif_generator
- use iso_fortran_env
+program Mixing_MOF_generator
+ use,intrinsic :: iso_fortran_env
  use mod_random
-! use topology_agents,only generate
  implicit none
- integer                                       :: i,j,k,l,h,z,m,ierr,nn,seed,iiii
+ integer                                       :: i,j,k,l,h,z,m,ierr,nn,iiii,n
  integer                                       :: linker_type_max=10
  integer                                       :: ii,jj,kk
  real                                          :: rrr,ppp,qqq
@@ -113,7 +120,8 @@ program zif_generator
  end type                                      
  type(cluster),allocatable                     :: nodes(:), linkers(:)
  integer,allocatable                           :: ensemble(:,:)
- call init_random_seed(seed)
+ call init_random_seed( )
+ !write(6,'(a,1x,i10)')"Random seed:",seed
  num_args = command_argument_count()
  allocate(args(num_args))
  do i = 1, num_args
@@ -153,20 +161,20 @@ program zif_generator
  write(6,'(80a)')('=',j=1,80)
  allocate(histogram_molar_fraction(linker_type_number))
  call system("if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi")
- write(6,'(a)') "if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi"
+ !write(6,'(a)') "if [ -f tmp  ] ; then rm tmp  ; touch tmp  ; fi"
  call system("if [ -f list ] ; then rm list ; touch list ; fi")
- write(6,'(a)') "if [ -f list ] ; then rm list ; touch list ; fi"
+ !write(6,'(a)') "if [ -f list ] ; then rm list ; touch list ; fi"
  do j=1,linker_type_number
   i=len(trim(linker_type(j)))
   k=LEN(TRIM(topology))
   string="ls tbp_database/???_"//topology(1:k)//"_cif_gin_all/???_???_"//linker_type(j)(1:i)//"_"//topology(1:k)//"_*.cif > tmp"
   call system(string)
-  write(6,'(a)')string
+  !write(6,'(a)')string
   write(line,*) linker_type_molar_fraction(j)
   k=len(trim(line))
   string="awk -v type="      //linker_type(j)(1:i)//&
    " -v r="      //line(4:k)//" '{print $1,type,r}' tmp >> list"
-  write(6,'(a)')string
+  !write(6,'(a)')string
   call system(string)
  end do
  open(111,file="list",iostat=ierr)
@@ -179,7 +187,7 @@ program zif_generator
   read(line(55:),*)       code,molar_fraction
   FolderDataBase=adjustl(trim( FolderDataBase ))
   CIFFilename=adjustl(trim(CIFFilename))
-  write(6,'(a,1x,a1)') CIFFilename,'#'
+  !write(6,'(a,1x,a1)') CIFFilename,'#'
   write(6,'(a,1x,a3,1x,f14.7)')trim(CIFFilename),trim(code),molar_fraction
   n_files=n_files+1
   if(n_files==1)then
@@ -190,7 +198,6 @@ program zif_generator
     read(121,'(a)',iostat=ierr) line
     if(ierr/=0)exit
     if(line(1:2)=='Zn'.or.line(3:4)=='Zn')then
-     write(6,*) "Detecting Zn cluster"
      n_metals=n_metals+1
     end if
    end do
@@ -285,7 +292,7 @@ program zif_generator
     read(100,*) nodes(z)%component_label(k),&
      ( nodes(z)%component_xcrystal(m,k),m=1,3),rrr
     call check_atom_type(nodes(z)%component_label(k),nodes(z)%component_size(k),nodes(z)%element(k))
-    write(6,*)nodes(z)%component_label(k),( nodes(z)%component_xcrystal(m,k),m=1,3)
+    !write(6,*)nodes(z)%component_label(k),( nodes(z)%component_xcrystal(m,k),m=1,3)
    end do
   end do
   z=0
@@ -304,7 +311,7 @@ program zif_generator
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
     call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k),linkers(h)%element(k))
-    write(6,*)linkers(h)%component_label(k),( linkers(h)%component_xcrystal(m,k),m=1,3)
+    !write(6,*)linkers(h)%component_label(k),( linkers(h)%component_xcrystal(m,k),m=1,3)
    end do
   end do
   !h=0
@@ -342,7 +349,7 @@ program zif_generator
   end if
   flag = .true.
   do while ( flag )
-   k=ensemble(j,randint(1,n_files,seed))
+   k=ensemble(j,randint(1,n_files))
    flag = .false.
    if ( linkers(k)%code /= linker_type( h ) ) flag = .true.
    if ( linkers(k)%virtual .eqv. .false. )    flag = .true.
@@ -385,12 +392,12 @@ program zif_generator
  open(678,file="log.txt")
  mc_exchange_linkers: do mc_steps=1,mc_max_steps
   allocate(eee(0:1))
-  l=randint(1,n_linkers,seed)               ! l:= position of linker in genome
+  l=randint(1,n_linkers)               ! l:= position of linker in genome
   eee(0)=cost_per_linker(l) + cost_molar()
   j=genome( l )                             ! j:= old linker
-  k=ensemble(l,randint(1,n_files,seed))     ! k:= new posible linker
+  k=ensemble(l,randint(1,n_files))     ! k:= new posible linker
   do while (k==j)
-   k=ensemble(l,randint(1,n_files,seed))
+   k=ensemble(l,randint(1,n_files))
   end do
   genome(l) = k                     ! test linker-k
   linkers(j)%virtual=.true.         ! j <- virtual
@@ -458,9 +465,9 @@ program zif_generator
   integer :: l,ll,j,jj,k,kk,iiii,jjjj,h,hh
   allocate(eee(0:n_files))
   call choose_by_comfort( l )
-  ll = randint(1,n_linkers,seed)
+  ll = randint(1,n_linkers)
   do while ( ll==l .or. linkers(genome(l))%code == linkers(genome(ll))%code) 
-   ll = randint(1,n_linkers,seed)
+   ll = randint(1,n_linkers)
    write(6,*) linkers(genome(l))%code
    write(6,*) linkers(genome(ll))%code
   end do
@@ -631,7 +638,7 @@ program zif_generator
    weight(ii)=linkers(ensemble(pivot,ii))%population 
   end do
   sum_weight = sum( weight(1:n_files ) )
-  eta = r4_uniform(0.0, sum_weight, seed)
+  eta = r4_uniform(0.0, sum_weight)
   do choosen = 1, n_files
     if ( eta <  linkers(ensemble(pivot,choosen))%population ) exit
     eta = eta - linkers(ensemble(pivot,choosen))%population
@@ -650,7 +657,7 @@ program zif_generator
   real :: sum_weight, eta
   call update_comfortably()
   sum_weight = sum( linkers(genome(1:n_linkers ))%comfortably  )  
-  eta = r4_uniform(0.0, sum_weight, seed)
+  eta = r4_uniform(0.0, sum_weight)
   do choosen = 1, n_linkers
     if ( eta <  linkers(genome(choosen))%comfortably ) exit
     eta = eta - linkers(genome(choosen))%comfortably
@@ -1143,4 +1150,4 @@ end subroutine make_dist_matrix
     print '(a)', 'Example:'
     print '(a)', '$ ./generate_ZIFs_linkers -t SOD -l 2 im 25.0 mim 75.0'
  end subroutine print_help
-end program zif_generator
+end program Mixing_MOF_generator
