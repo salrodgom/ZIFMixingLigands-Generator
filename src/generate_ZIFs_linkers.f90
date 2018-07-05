@@ -356,7 +356,6 @@ program Mixing_MOF_generator
    flag = .false.
    if ( linkers(k)%code /= linker_type( h ) ) flag = .true.
    if ( linkers(k)%virtual .eqv. .false. )    flag = .true.
-   !write( 6,*)  linkers(k)%code, linker_type( h ), linkers(k)%virtual, flag
   end do
   if(j==1)then
    genome(1)=k
@@ -365,14 +364,6 @@ program Mixing_MOF_generator
    write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code, linkers(k)%virtual
    cycle add_linkers
   end if
-  !do l=1,j-1 ! scan previous linkers
-  ! if(genome(l)==k) then
-  !  j=j-1
-  !  nn=nn+1
-  !  cycle add_linkers ! is it really new?
-  ! end if
-  !end do
-  ! great!
   genome(j)=k
   linkers(k)%virtual=.false.
   write(6,*)100*j/real(n_linkers),genome(j),nn, linkers(k)%code, linkers(k)%virtual
@@ -862,7 +853,7 @@ program Mixing_MOF_generator
     s=1.00
     element="Cl"
    case default
-    write(6,'(a)')"============="
+    write(6,'(a)')"[Error]"
     write(6,*) lll
     STOP 'Atom unknowed'
   end select check_atom
