@@ -12,34 +12,37 @@ module mod_random
   integer(int64)       :: t
   call random_seed(size = n)
   allocate(seed(n))
+  write(6,'(a)')"Random seed:"
   ! First try if the OS provides a random number generator
   open(newunit=un, file="/dev/urandom", access="stream", &
        form="unformatted", action="read", status="old", iostat=istat)
   if (istat == 0) then
-     read(un) seed
-     close(un)
+   read(un) seed
+   close(un)
+   write(6,'(a)')"OS provides a random number generator"
   else
-     ! Fallback to XOR:ing the current time and pid. The PID is
-     ! useful in case one launches multiple instances of the same
-     ! program in parallel.
-     call system_clock(t)
-     if (t == 0) then
-        call date_and_time(values=dt)
-        t = (dt(1) - 1970) * 365_int64 * 24 * 60 * 60 * 1000 &
-             + dt(2) * 31_int64 * 24 * 60 * 60 * 1000 &
-             + dt(3) * 24_int64 * 60 * 60 * 1000 &
-             + dt(5) * 60 * 60 * 1000 &
-             + dt(6) * 60 * 1000 + dt(7) * 1000 &
-             + dt(8)
-     end if
-     pid = getpid()
-     t = ieor(t, int(pid, kind(t)))
-     do i = 1, n
-        seed(i) = lcg(t)
-     end do
+   ! Fallback to XOR:ing the current time and pid. The PID is
+   ! useful in case one launches multiple instances of the same
+   ! program in parallel.
+   call system_clock(t)
+   if (t == 0) then
+      call date_and_time(values=dt)
+      t = (dt(1) - 1970) * 365_int64 * 24 * 60 * 60 * 1000 &
+           + dt(2) * 31_int64 * 24 * 60 * 60 * 1000 &
+           + dt(3) * 24_int64 * 60 * 60 * 1000 &
+           + dt(5) * 60 * 60 * 1000 &
+           + dt(6) * 60 * 1000 + dt(7) * 1000 &
+           + dt(8)
+   end if
+   pid = getpid()
+   t = ieor(t, int(pid, kind(t)))
+   do i = 1, n
+      seed(i) = lcg(t)
+   end do
+   write(6,'(a)')"Fallback to the current time and pid."
   end if
   call random_seed(put=seed)
-  write(6,*)seed
+  write(6,*) seed
  contains
   ! This simple PRNG might not be good enough for real work, but is
   ! sufficient for seeding a better PRNG.
@@ -384,9 +387,7 @@ program Mixing_MOF_generator
  write(6,'(80a)')('=',l=1,80)
  call update_comfortably()
  mc_steps=0
- write(6,'(1000(i6,1x))')(genome(i),i=1,n_linkers)
  call writeCIFFile_from_clusters()
- !stop
  rrr=0.0
  write(6,'(a,1x,i5)') "Performing MC, max number of steps:", mc_max_steps
  open(678,file="log.txt")
