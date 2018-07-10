@@ -81,12 +81,15 @@ program Mixing_MOF_generator
  implicit none
  integer                                       :: i,j,k,l,h,z,m,ierr,nn,iiii,n
  integer                                       :: linker_type_max=10
+ integer                                       :: n_exchanged = 0
+ integer                                       :: n_rotated   = 0
+ integer                                       :: n_accepted = 0
  integer                                       :: ii,jj,kk
- real                                          :: rrr,ppp,qqq
+ real                                          :: rrr,ppp,qqq,xyz
  real                                          :: atom(3),ouratom(3)
  integer                                       :: num_args
  real,parameter                                :: r_min_criteria_connectivity=0.56
- real,parameter                                :: r_min_criteria_overlap = 1.0
+ real,parameter                                :: r_min_criteria_overlap = 1.14
  integer,parameter                             :: max_number_tries=1000
  integer                                       :: n_atoms = 0,n_nodes=0,n_linkers=0,n_metals=0
  real                                          :: cell_0(1:6) = 0.0, rv(3,3),vr(3,3)
@@ -105,6 +108,7 @@ program Mixing_MOF_generator
  integer                                       :: linker_type_number = 1
  real, allocatable                             :: eee(:)
  real,dimension(:),allocatable                 :: linker_type_molar_fraction
+ real,allocatable                              :: backup_positions_linker(:,:)
  integer,dimension(:),allocatable              :: genome
  integer,dimension(:),allocatable              :: histogram_molar_fraction
  character(len=3)                              :: code
@@ -114,6 +118,7 @@ program Mixing_MOF_generator
   integer                                     :: n_components
   integer                                     :: id
   real                                        :: component_xcrystal(1:3,1:500)
+  real                                        :: component_dcrystal(1:3,1:500)
   real                                        :: component_size(500)
   character(len=2)                            :: component_label(500)
   character(len=2)                            :: element(500)
@@ -212,7 +217,6 @@ program Mixing_MOF_generator
  allocate(nodes(n_nodes))
  allocate(linkers(n_files*n_linkers))
  allocate(ensemble(n_linkers,n_files))
- mc_max_steps=1000*n_linkers
  write(6,'(80a)')('=',j=1,80)
  write(6,*)topology
  write(6,*)n_metals, 'metals/uc'
@@ -294,8 +298,16 @@ program Mixing_MOF_generator
    do k=1,nodes(z)%n_components
     read(100,*) nodes(z)%component_label(k),&
      ( nodes(z)%component_xcrystal(m,k),m=1,3),rrr
+    nodes(z)%component_dcrystal(1,k) = rv(1,1)*nodes(z)%component_xcrystal(1,k) + &
+                                       rv(1,2)*nodes(z)%component_xcrystal(2,k) + &
+                                       rv(1,3)*nodes(z)%component_xcrystal(3,k)
+    nodes(z)%component_dcrystal(2,k) = rv(2,1)*nodes(z)%component_xcrystal(1,k) + &
+                                       rv(2,2)*nodes(z)%component_xcrystal(2,k) + &
+                                       rv(2,3)*nodes(z)%component_xcrystal(3,k)
+    nodes(z)%component_dcrystal(3,k) = rv(3,1)*nodes(z)%component_xcrystal(1,k) + &
+                                       rv(3,2)*nodes(z)%component_xcrystal(2,k) + &
+                                       rv(3,3)*nodes(z)%component_xcrystal(3,k)
     call check_atom_type(nodes(z)%component_label(k),nodes(z)%component_size(k),nodes(z)%element(k))
-    !write(6,*)nodes(z)%component_label(k),( nodes(z)%component_xcrystal(m,k),m=1,3)
    end do
   end do
   z=0
@@ -313,8 +325,16 @@ program Mixing_MOF_generator
    do k=1,linkers(h)%n_components
     read(100,*) linkers(h)%component_label(k),&
      ( linkers(h)%component_xcrystal(m,k),m=1,3),rrr
+    linkers(h)%component_dcrystal(1,k) = rv(1,1)*linkers(h)%component_xcrystal(1,k) + &
+                                         rv(1,2)*linkers(h)%component_xcrystal(2,k) + &
+                                         rv(1,3)*linkers(h)%component_xcrystal(3,k)
+    linkers(h)%component_dcrystal(2,k) = rv(2,1)*linkers(h)%component_xcrystal(1,k) + &
+                                         rv(2,2)*linkers(h)%component_xcrystal(2,k) + &
+                                         rv(2,3)*linkers(h)%component_xcrystal(3,k)
+    linkers(h)%component_dcrystal(3,k) = rv(3,1)*linkers(h)%component_xcrystal(1,k) + &
+                                         rv(3,2)*linkers(h)%component_xcrystal(2,k) + &
+                                         rv(3,3)*linkers(h)%component_xcrystal(3,k)
     call check_atom_type(linkers(h)%component_label(k),linkers(h)%component_size(k),linkers(h)%element(k))
-    !write(6,*)linkers(h)%component_label(k),( linkers(h)%component_xcrystal(m,k),m=1,3)
    end do
   end do
   !h=0
@@ -380,40 +400,101 @@ program Mixing_MOF_generator
  mc_steps=0
  call writeCIFFile_from_clusters()
  rrr=0.0
+ mc_max_steps=1000*n_linkers
  write(6,'(a,1x,i5)') "Performing MC, max number of steps:", mc_max_steps
  open(678,file="log.txt")
- mc_exchange_linkers: do mc_steps=1,mc_max_steps
-  allocate(eee(0:1))
-  l=randint(1,n_linkers)               ! l:= position of linker in genome
-  eee(0)=cost_per_linker(l) + cost_molar()
-  j=genome( l )                             ! j:= old linker
-  k=ensemble(l,randint(1,n_files))     ! k:= new posible linker
-  do while (k==j)
-   k=ensemble(l,randint(1,n_files))
-  end do
-  genome(l) = k                     ! test linker-k
-  linkers(j)%virtual=.true.         ! j <- virtual
-  linkers(k)%virtual=.false.        ! k <- real
-  eee(1) = cost_per_linker(l) + cost_molar()
-  if( eee(1) >= eee(0)  )then
-   genome(l) = j                    ! rechazo el cambio
-   linkers(k)%virtual=.true.        ! k <- virtual
-   linkers(j)%virtual=.false.       ! j <- real
-  !end if
+ mc_exchange_linkers: do mc_steps=1, mc_max_steps
+  if(mc_steps<=100*n_linkers)then
+   xyz=0.0
   else
-   ppp=cost()/real_n_atoms()
-   if(ppp-rrr<0.0) then
-    write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
-    mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
-   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
-    write(678,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
-    mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
-   'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
-   end if
-   rrr=ppp
+   xyz=r4_uniform(0.0,1.0)
   end if
-  call writeCIFFile_from_clusters()
-  deallocate( eee )
+  if( xyz <= 0.5 ) then
+   allocate(eee(0:1))
+   l=randint(1,n_linkers)               ! l:= position of linker in genome
+   eee(0)=cost_per_linker(l) + cost_molar()
+   j=genome( l )                             ! j:= old linker
+   k=ensemble(l,randint(1,n_files))     ! k:= new posible linker
+   do while (k==j)
+    k=ensemble(l,randint(1,n_files))
+   end do
+   genome(l) = k                     ! test linker-k
+   linkers(j)%virtual=.true.         ! j <- virtual
+   linkers(k)%virtual=.false.        ! k <- real
+   eee(1) = cost_per_linker(l) + cost_molar()
+   if( eee(1) >= eee(0)  )then
+    genome(l) = j                    ! rechazo el cambio
+    linkers(k)%virtual=.true.        ! k <- virtual
+    linkers(j)%virtual=.false.       ! j <- real
+   !end if
+   else
+    n_exchanged=n_exchanged+1
+    n_accepted=n_exchanged+n_rotated
+    ppp=cost()/real_n_atoms()
+    if(ppp-rrr<0.0) then
+     write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1x,f14.7,1x,a,1000(f14.7,1x)))')&
+     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
+     'exchange move:',n_exchanged/real(n_accepted),&
+     'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+     write(678,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
+     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
+    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+    end if
+    rrr=ppp
+   end if
+   call writeCIFFile_from_clusters()
+   deallocate( eee )
+  else
+ !end do mc_exchange_linkers
+ !mc_max_steps=1000*n_linkers
+ !mc_rotations: do mc_steps=100*n_linkers,mc_max_steps
+   allocate(eee(0:1))
+   l=randint(1,n_linkers)
+   j=genome(l)
+   eee(0)=cost_per_linker(l) + cost_molar()
+   allocate( backup_positions_linker(1:3, 1: linkers(j)%n_components ) )
+   do i=1, linkers(j)%n_components
+    do kk=1,3
+     backup_positions_linker(kk,i) = linkers(j)%component_xcrystal(kk,i)
+    end do
+   end do
+   call Random_Rotation_Axe_NN_atoms( j )
+   eee(1)=cost_per_linker(l) + cost_molar()
+   if( eee(1) >= eee(0)  )then                       ! Rechazo el cambio
+    do i=1, linkers(j)%n_components
+     do kk=1,3
+      linkers(j)%component_xcrystal(kk,i) = backup_positions_linker(kk,i)
+     end do
+     linkers(j)%component_dcrystal(1,i) = rv(1,1)*linkers(j)%component_xcrystal(1,i) + &
+                                          rv(1,2)*linkers(j)%component_xcrystal(2,i) + &
+                                          rv(1,3)*linkers(j)%component_xcrystal(3,i)
+     linkers(j)%component_dcrystal(2,i) = rv(2,1)*linkers(j)%component_xcrystal(1,i) + &
+                                          rv(2,2)*linkers(j)%component_xcrystal(2,i) + &
+                                          rv(2,3)*linkers(j)%component_xcrystal(3,i)
+     linkers(j)%component_dcrystal(3,i) = rv(3,1)*linkers(j)%component_xcrystal(1,i) + &
+                                          rv(3,2)*linkers(j)%component_xcrystal(2,i) + &
+                                          rv(3,3)*linkers(j)%component_xcrystal(3,i)
+    end do
+   else
+    n_rotated=n_rotated+1
+    n_accepted=n_exchanged+n_rotated
+    ppp=cost()/real_n_atoms()
+    if(ppp-rrr<0.0) then
+     write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1x,f14.7,1x,a,1000(f14.7,1x)))')&
+     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
+     'rotation move:',n_rotated/real(n_accepted),&
+     'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+     write(678,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
+     mc_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
+    'molar fractions:',(histogram_molar_fraction(i)/real(n_linkers),i=1,linker_type_number)
+    end if
+    rrr=ppp
+   end if
+   call writeCIFFile_from_clusters()
+   deallocate( backup_positions_linker )
+   deallocate( eee )
+  end if
+ !end do mc_rotations
  end do mc_exchange_linkers
  write(6,'((i5,1x,e20.10,1x,e20.10,1x,e20.10,1x,a,1000(f14.7,1x)))')&
   mc_max_steps,ppp,ppp-rrr,cost_molar()/real_n_atoms(),&
@@ -452,6 +533,93 @@ program Mixing_MOF_generator
   end do scan_overlap
   return
  end function overlap
+!
+ subroutine linker2axe( k, v )
+  implicit none
+  integer,intent(in)  :: k
+  real, intent(out)   :: v(1:3)
+  real                :: r(1:2,1:3), absvec
+  integer             :: counter, ii, kk
+  counter=0
+  found_N_atoms: do ii=1,linkers(k)%n_components
+   if ( linkers(k)%element( ii ) == "N " ) then
+    counter = counter + 1
+    if ( counter >= 2 ) exit found_N_atoms
+    do kk=1,3
+     r(counter,kk) = linkers(k)%component_xcrystal(kk,ii)
+    end do
+   end if
+  end do found_N_atoms
+  absvec = sqrt( (r(1,1)-r(2,1))**2 + (r(1,2)-r(2,2))**2 + (r(1,3)-r(2,3))**2 ) 
+  do kk=1,3
+   v(kk) = ( r(1, kk ) - r(2, kk) ) / absvec
+  end do
+  return
+ end subroutine linker2axe
+!
+ subroutine Random_Rotation_Axe_NN_atoms(k)
+  ! https://en.wikipedia.org/wiki/Rotation_matrix#cite_ref-5
+  implicit none
+  integer,intent(in)   ::   k
+  integer              ::   ii,jj
+  real                 ::   MaximumRotation = 180.0
+  real, parameter      ::   pi = ACOS(-1.0)
+  real                 ::   DEGTORAD
+  real                 ::   rot(1:3,1:3), angle_change
+  real                 ::   u(1:3),x,y,z,r,s,c,o,p,q
+  DEGTORAD = pi/180.0
+  r = r4_uniform(0.0, 1.0)
+  angle_change=MaximumRotation*DEGTORAD*r
+  s = sin( angle_change )
+  c = cos( angle_change )
+  call linker2axe( k, u )
+  x=u(1)
+  y=u(2)
+  z=u(3)
+!
+  !write(6,*)'Rotation:'
+  !write(6,*)'Axe:', x,y,z, x**2+y**2+z**2
+  !write(6,*)'Angle:',MaximumRotation*r,'deg'
+!
+  rot(1,1)=c+x*x*(1-c)
+  rot(1,2)=x*y*(1-c)-z*s
+  rot(1,3)=x*z*(1-c)+y*s
+  rot(2,1)=y*x*(1-c)+z*s
+  rot(2,2)=c+y*y*(1-c)
+  rot(2,3)=y*z*(1-c)-x*s
+  rot(1,3)=z*x*(1-c)-y*s
+  rot(2,3)=z*y*(1-c)+x*s
+  rot(3,3)=c+z*z*(1-c)
+! 
+  !do jj=1,3
+  ! write(6,'(3(f14.7,1x))') ( rot(jj,ii) , ii=1,3  )
+  !end do
+!
+  do ii=1,linkers(k)%n_components
+   o=linkers(k)%component_dcrystal(1,ii)*rot(1,1)+&
+     linkers(k)%component_dcrystal(2,ii)*rot(1,2)+&
+     linkers(k)%component_dcrystal(3,ii)*rot(1,3)
+   p=linkers(k)%component_dcrystal(1,ii)*rot(2,1)+&
+     linkers(k)%component_dcrystal(2,ii)*rot(2,2)+&
+     linkers(k)%component_dcrystal(3,ii)*rot(2,3)
+   q=linkers(k)%component_dcrystal(1,ii)*rot(3,1)+&
+     linkers(k)%component_dcrystal(2,ii)*rot(3,2)+&
+     linkers(k)%component_dcrystal(3,ii)*rot(3,3)
+   linkers(k)%component_dcrystal(1,ii) = o
+   linkers(k)%component_dcrystal(2,ii) = p
+   linkers(k)%component_dcrystal(3,ii) = q
+   linkers(k)%component_xcrystal(1,k) = vr(1,1)*linkers(k)%component_dcrystal(1,ii)+&
+                                        vr(1,2)*linkers(k)%component_dcrystal(2,ii)+&
+                                        vr(1,3)*linkers(k)%component_dcrystal(3,ii)
+   linkers(k)%component_xcrystal(2,k) = vr(2,1)*linkers(k)%component_dcrystal(1,ii)+&
+                                        vr(2,2)*linkers(k)%component_dcrystal(2,ii)+&
+                                        vr(2,3)*linkers(k)%component_dcrystal(3,ii)
+   linkers(k)%component_xcrystal(3,k) = vr(3,1)*linkers(k)%component_dcrystal(1,ii)+&
+                                        vr(3,2)*linkers(k)%component_dcrystal(2,ii)+&
+                                        vr(3,3)*linkers(k)%component_dcrystal(3,ii)
+  end do
+  return
+ end subroutine Random_Rotation_Axe_NN_atoms
 !
  subroutine regrow_move()
   integer :: l,ll,j,jj,k,kk,iiii,jjjj,h,hh
@@ -568,7 +736,7 @@ program Mixing_MOF_generator
  end subroutine update_molar_fraction
  real function cost_molar()
   implicit none
-  real, parameter  ::  molar_constant=1e10
+  real, parameter  ::  molar_constant=1e9
   integer          ::  abc
   call update_molar_fraction()
   cost_molar=0.0
