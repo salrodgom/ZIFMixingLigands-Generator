@@ -801,7 +801,7 @@ end subroutine
   integer(i64), intent(in)  :: linker
   logical,      intent(out) :: wrong
   integer(i64)              :: i,j,k
-  real(r64), parameter      :: MaximumRotation = 45.0_r64
+  real(r64), parameter      :: MaximumRotation = 15.0_r64
   real(r64), parameter      :: pi = ACOS(-1.0_r64)
   real(r64)                 :: angle, rot(3,3), r1(3), r2(3), x,y,z,r,s,c,trace
   real(r64)                 :: u,v,w,o,p,q,absvec, DEGTORAD
@@ -840,9 +840,7 @@ end subroutine
   x = x/absvec
   y = y/absvec
   z = z/absvec
-!
   !write(6,'(4(f14.7,1x))')x,y,z,x*x + y*y + z*z
-!
   rot(1,1)=c + (1.0_r64-c)*x*x
   rot(1,2)=(1.0_r64-c)*x*y - z*s
   rot(1,3)=(1.0_r64-c)*x*z + y*s
@@ -854,17 +852,17 @@ end subroutine
   rot(3,3)=c + (1.0_r64-c)*z*z
   trace = rot(1,1)+rot(2,2)+rot(3,3)
 ! {{ debuging, write matrix:
-   !write(6,'(a)')"Rotation Matrix:"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "/",( rot(1,ii), ii=1,3),"\"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "|",( rot(2,ii), ii=1,3),"|"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "\",( rot(3,ii), ii=1,3),"/"
-   !write(6,'(a)') " "
-   !write(6,'(a)')"Transformation Matrix:"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "/",( rv(1,ii), ii=1,3),"\"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "|",( rv(2,ii), ii=1,3),"|"
-   !write(6,'(a,1x,3(f14.7,1x),a)') "\",( rv(3,ii), ii=1,3),"/"
-!  debugging, check Trace of the transformation
-   !write( 6,*) "Traze:", trace
+  !write(6,'(a)')"Rotation Matrix:"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "/",( rot(1,ii), ii=1,3),"\"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "|",( rot(2,ii), ii=1,3),"|"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "\",( rot(3,ii), ii=1,3),"/"
+  !write(6,'(a)') " "
+  !write(6,'(a)')"Transformation Matrix:"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "/",( rv(1,ii), ii=1,3),"\"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "|",( rv(2,ii), ii=1,3),"|"
+  !write(6,'(a,1x,3(f14.7,1x),a)') "\",( rv(3,ii), ii=1,3),"/"
+! !debugging, check Trace of the transformation
+  !write( 6,*) "Traze:", trace
   if( abs( trace - (1.0_r64+2.0_r64*c) ) >= 1.0e-6_r64 ) STOP "Wrong Rotation Matrix"
   do i=1,linkers(linker)%n_components
 ! (x,y,z): direct space, (o,p,q): direct space

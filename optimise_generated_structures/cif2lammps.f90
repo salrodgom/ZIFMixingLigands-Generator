@@ -7,7 +7,7 @@ program zif_cif2gin
  real                :: r = 1.0e12
 !parameters
  real,parameter      :: k_B = 8.617332478e-5
- real,parameter      :: r_min_criteria_connectivity=0.15
+ real,parameter      :: r_min_criteria_connectivity=0.1
  INTEGER, PARAMETER  :: muchisimo=100000
 ! variables
  integer             :: num_args
